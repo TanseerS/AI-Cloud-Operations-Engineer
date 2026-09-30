@@ -14,7 +14,7 @@ import config from '../lib/config.js';
 /** What each API capability will do, so the grid explains the product, not just the routes. */
 const CAPABILITY_COPY = {
   health: { icon: 'activity', title: 'Health', body: 'Liveness of the API itself. The only capability wired up today.' },
-  discovery: { icon: 'cloud', title: 'Resource discovery', body: 'Enumerates the tagged AWS lab resources into a single inventory.' },
+  infrastructure: { icon: 'server', title: 'Resource discovery', body: 'Enumerates the tagged AWS lab resources into a single live inventory.' },
   architecture: { icon: 'architecture', title: 'Architecture analysis', body: 'Builds the node and edge graph rendered as an interactive diagram.' },
   cost: { icon: 'cost', title: 'Cost analysis', body: 'Estimates spend and waste, and quantifies what each fix would save.' },
   cloudwatch: { icon: 'logs', title: 'CloudWatch analysis', body: 'Pulls the metric and log evidence that proves a finding is real.' },

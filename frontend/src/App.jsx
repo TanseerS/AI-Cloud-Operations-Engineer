@@ -5,6 +5,7 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { HealthProvider, useHealth } from './context/HealthContext.jsx';
 
 import OverviewPage from './pages/OverviewPage.jsx';
+import InfrastructurePage from './pages/InfrastructurePage.jsx';
 import ArchitecturePage from './pages/ArchitecturePage.jsx';
 import CostPage from './pages/CostPage.jsx';
 import IssuesPage from './pages/IssuesPage.jsx';
@@ -19,6 +20,7 @@ function Workspace() {
       <ErrorBoundary>
         <Routes>
           <Route path="/" element={<OverviewPage />} />
+          <Route path="/infrastructure" element={<InfrastructurePage />} />
           <Route path="/architecture" element={<ArchitecturePage />} />
           <Route path="/cost" element={<CostPage />} />
           <Route path="/issues" element={<IssuesPage />} />

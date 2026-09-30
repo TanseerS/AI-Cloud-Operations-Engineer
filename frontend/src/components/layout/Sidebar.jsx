@@ -5,6 +5,7 @@ import config from '../../lib/config.js';
 
 export const NAV_ITEMS = [
   { to: '/', label: 'Overview', icon: 'overview', end: true },
+  { to: '/infrastructure', label: 'Infrastructure', icon: 'server' },
   { to: '/architecture', label: 'Architecture', icon: 'architecture' },
   { to: '/cost', label: 'Cost', icon: 'cost' },
   { to: '/issues', label: 'Issues', icon: 'issues' },

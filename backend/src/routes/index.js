@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import healthRoute from './health.route.js';
-import discoveryRoute from './discovery.route.js';
+import infrastructureRoute from './infrastructure.route.js';
 import architectureRoute from './architecture.route.js';
 import costRoute from './cost.route.js';
 import cloudwatchRoute from './cloudwatch.route.js';
@@ -21,7 +21,7 @@ router.get('/', (_req, res) => {
     service: 'aicoe-api',
     endpoints: {
       health: { path: '/api/v1/health', status: 'available' },
-      discovery: { path: '/api/v1/discovery', status: 'planned' },
+      infrastructure: { path: '/api/v1/infrastructure/resources', status: 'available' },
       architecture: { path: '/api/v1/architecture', status: 'planned' },
       cost: { path: '/api/v1/cost', status: 'planned' },
       cloudwatch: { path: '/api/v1/cloudwatch', status: 'planned' },
@@ -33,7 +33,7 @@ router.get('/', (_req, res) => {
 });
 
 router.use('/health', healthRoute);
-router.use('/discovery', discoveryRoute);
+router.use('/infrastructure', infrastructureRoute);
 router.use('/architecture', architectureRoute);
 router.use('/cost', costRoute);
 router.use('/cloudwatch', cloudwatchRoute);

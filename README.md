@@ -9,12 +9,13 @@ reliability problems, and proposes or applies fixes.
 |---|---|
 | Lab environment (5 seeded issues) | Done |
 | Application foundation (frontend + API) | Done |
+| AWS resource discovery | Done |
 | Reset mechanism | Not started |
-| AWS analysis modules | Not started |
+| Architecture / cost / CloudWatch / Bedrock analysis | Not started |
 | Detection / remediation agent | Not started |
 
-The application is scaffolded and running end to end, but it does not talk to AWS yet.
-Every analysis endpoint answers `501 Not Implemented` until its module is built.
+The application discovers the real AWS lab inventory end to end. The remaining analysis
+endpoints answer `501 Not Implemented` until their module is built.
 
 ## Repository layout
 
@@ -24,12 +25,15 @@ backend/                 Node + Express API - the only tier that will hold AWS a
     config/              Every environment variable enters here and nowhere else
     routes/              Thin HTTP layer, one router per capability
     services/            Capability logic, kept out of route handlers
+      aws/               SDK client factory and the reusable lab-resource filter
+      discovery/         One collector per AWS service, registered in index.js
     middleware/          Request logging, 404, error to response
     lib/                 Typed errors and small helpers
 frontend/                React + Vite dashboard - never holds AWS credentials
   src/
     components/layout/   App shell, sidebar, top bar, page header
     components/ui/       Card, Badge, Button, StatTile, StatusIndicator, EmptyState, Icon
+    components/infrastructure/  Service sections and expandable resource cards
     context/             App-wide API health, polled once
     hooks/               Theme and API-resource hooks
     lib/                 Config and the single API client
@@ -69,7 +73,7 @@ Base path `/api/v1`. Only health is implemented.
 |---|---|---|
 | GET | `/api/v1/health` | Available |
 | GET | `/api/v1` | Available - lists the capability surface |
-| GET | `/api/v1/discovery` | 501 |
+| GET | `/api/v1/infrastructure/resources` | Available - live AWS inventory |
 | GET | `/api/v1/architecture` | 501 |
 | GET | `/api/v1/cost` | 501 |
 | GET | `/api/v1/cloudwatch` | 501 |
@@ -98,6 +102,13 @@ repository except the `.env.example` templates.
 Documented in [docs/design-system.md](docs/design-system.md). One neutral ramp, one
 accent, four semantic status colours, a 4px spacing scale, and light and dark themes
 driven entirely by CSS custom properties.
+
+## Resource discovery
+
+`GET /api/v1/infrastructure/resources` returns the live inventory of lab resources across
+Lambda, CloudWatch Logs, API Gateway, SSM Parameter Store and IAM. See
+[docs/discovery.md](docs/discovery.md) for the response shape, the lab filter and the
+partial-failure contract.
 
 ## The lab
 

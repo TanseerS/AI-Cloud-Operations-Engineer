@@ -19,6 +19,9 @@ const PATHS = {
   cloud: 'M17.5 19a4.5 4.5 0 0 0 .5-9 6 6 0 0 0-11.6 1.5A3.5 3.5 0 0 0 7 19z',
   logs: 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h5',
   plug: 'M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0zM12 17v5',
+  chevron: 'm9 18 6-6-6-6',
+  server: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h0M8 17h0',
+  key: 'M15 7a4 4 0 1 1-3.9 5H9l-2 2-2-2 2-2h2.1A4 4 0 0 1 15 7z',
 };
 
 export function Icon({ name, size = 16, className, ...rest }) {
