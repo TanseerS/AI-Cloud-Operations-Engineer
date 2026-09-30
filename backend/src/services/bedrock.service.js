@@ -79,6 +79,17 @@ function modelInfo(extra = {}) {
   };
 }
 
+/**
+ * The last analysis, if one is still cached. Never invokes - callers that want AI
+ * reasoning as a bonus must not cause a billed call as a side effect.
+ */
+export function getCachedAiAnalysis() {
+  if (!cache) return null;
+  const ageMs = Date.now() - cache.at;
+  if (ageMs > config.bedrock.cacheTtlSeconds * 1000) return null;
+  return { ...cache.payload, cacheAgeSeconds: Math.round(ageMs / 1000) };
+}
+
 /** Configuration and last-known state. Makes no Bedrock call, so the UI can poll it. */
 export function getAiStatus() {
   return {

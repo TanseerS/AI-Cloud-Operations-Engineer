@@ -26,7 +26,8 @@ router.get('/', (_req, res) => {
       costs: { path: '/api/v1/costs', status: 'available' },
       aiStatus: { path: '/api/v1/ai/status', status: 'available' },
       aiAnalyze: { path: 'POST /api/v1/ai/analyze', status: 'available' },
-      remediation: { path: '/api/v1/remediation', status: 'planned' },
+      remediationPlan: { path: 'POST /api/v1/remediation/plan', status: 'available' },
+      remediationPlans: { path: '/api/v1/remediation/plans', status: 'available' },
       lab: { path: '/api/v1/lab/reset', status: 'planned' },
     },
   });

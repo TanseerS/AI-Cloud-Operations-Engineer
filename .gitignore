@@ -42,3 +42,6 @@ __pycache__/
 *.pem
 *.key
 credentials
+
+# Local plan storage (not AWS, not a database)
+backend/.data/

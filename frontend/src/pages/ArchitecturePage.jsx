@@ -19,7 +19,7 @@ export function ArchitecturePage() {
   const architecture = useApiResource(api.architecture);
   // Findings are loaded alongside the topology so a node can carry its own health.
   // A failure here degrades the overlay only - the graph still renders.
-  const health = useApiResource(api.health);
+  const health = useApiResource(api.healthAnalysis);
   const [searchParams] = useSearchParams();
   const focusId = searchParams.get('focus');
   const { data, status, error, reload } = architecture;

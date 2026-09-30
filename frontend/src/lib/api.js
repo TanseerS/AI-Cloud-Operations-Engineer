@@ -57,14 +57,22 @@ export const api = {
   infrastructure: () => request('/infrastructure/resources', { timeoutMs: 30000 }),
   architecture: () => request('/architecture/graph', { timeoutMs: 30000 }),
   costs: () => request('/costs', { timeoutMs: 30000 }),
-  // Health analysis fans out across discovery, CloudWatch metrics and logs.
-  health: () => request('/health/analysis', { timeoutMs: 45000 }),
+  // Health analysis fans out across discovery, CloudWatch metrics and logs. Distinct
+  // from `health` above, which is the cheap liveness probe the app shell polls - they
+  // were briefly the same key, and the analysis silently shadowed the probe.
+  healthAnalysis: () => request('/health/analysis', { timeoutMs: 45000 }),
   // Free: configuration and last-known state, no Bedrock call.
   aiStatus: () => request('/ai/status'),
   // POST on purpose. Analysis costs money, so it can never be triggered by a render,
   // a prefetch or a crawler - only by someone deciding to run it.
   aiAnalyze: ({ force = false } = {}) =>
     request(`/ai/analyze${force ? '?force=true' : ''}`, { method: 'POST', timeoutMs: 120000 }),
+  remediationPlans: () => request('/remediation/plans'),
+  // Planning re-derives every target from AWS, so it takes as long as a discovery pass.
+  // The body carries no target: the backend rejects any attempt to supply one.
+  planRemediation: () => request('/remediation/plan', { method: 'POST', timeoutMs: 120000 }),
+  approvePlan: (id) =>
+    request(`/remediation/plans/${encodeURIComponent(id)}/approve`, { method: 'POST', timeoutMs: 20000 }),
 };
 
 export default api;

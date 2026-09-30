@@ -14,8 +14,9 @@ reliability problems, and proposes or applies fixes.
 | Cost analysis | Done |
 | CloudWatch health & issue detection | Done |
 | Bedrock AI analysis | Done |
+| Remediation planning & approval | Done |
 | Reset mechanism | Not started |
-| Remediation & lab reset | Not started |
+| Remediation execution & lab reset | Not started |
 | Detection / remediation agent | Not started |
 
 The application discovers the real AWS lab inventory end to end. The remaining analysis
@@ -36,6 +37,7 @@ backend/                 Node + Express API - the only tier that will hold AWS a
       cloudwatch/        Bounded metric and log collection, log redaction
       health/            Fact model and the deterministic detection rules
       ai/                Bedrock client, analysis schema, context builder, prompt
+      remediation/       Action allowlist, safety gate, plan storage
     middleware/          Request logging, 404, error to response
     lib/                 Typed errors and small helpers
 frontend/                React + Vite dashboard - never holds AWS credentials
@@ -47,6 +49,7 @@ frontend/                React + Vite dashboard - never holds AWS credentials
     components/cost/            Trend chart, service breakdown, cost drivers
     components/health/          Health score, severity tiles, issue cards, evidence
     components/ai/              Model status, AI findings, recommendation groups
+    components/remediation/     Plan cards, current-to-proposed diff
     context/             App-wide API health, polled once
     hooks/               Theme and API-resource hooks
     lib/                 Config and the single API client
@@ -92,7 +95,8 @@ Base path `/api/v1`. Only health is implemented.
 | GET | `/api/v1/health/analysis` | Available - CloudWatch health & findings |
 | GET | `/api/v1/ai/status` | Available - model, region, policy (no Bedrock call) |
 | POST | `/api/v1/ai/analyze` | Available - Bedrock analysis |
-| POST | `/api/v1/remediation` | 501 |
+| POST | `/api/v1/remediation/plan` | Available - builds plans (no execution) |
+| POST | `/api/v1/remediation/plans/:id/approve` | Available - state change only |
 | POST | `/api/v1/lab/reset` | 501 |
 
 ```console
@@ -151,6 +155,14 @@ Engineer, to reason over the observations the application already collected. Mod
 selection was measured rather than assumed, the response is schema-validated, and every
 issue and resource it names is checked against what was actually discovered — anything
 else is rejected before display. See [docs/ai-analysis.md](docs/ai-analysis.md).
+
+## Remediation planning
+
+`POST /api/v1/remediation/plan` turns detected issues into single, reversible AWS changes.
+The caller cannot name a target: every resource, action and parameter is re-derived from
+AWS by the backend, and only allowlisted actions against correctly tagged lab resources
+become executable plans. Approval marks a plan ready; it executes nothing. See
+[docs/remediation-planning.md](docs/remediation-planning.md).
 
 ## The lab
 

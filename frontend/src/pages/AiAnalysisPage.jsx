@@ -24,7 +24,7 @@ import { formatDuration, formatRelative } from '../lib/format.js';
  */
 export function AiAnalysisPage() {
   const status = useApiResource(api.aiStatus);
-  const health = useApiResource(api.health);
+  const health = useApiResource(api.healthAnalysis);
 
   const [state, setState] = useState({ phase: 'idle', data: null, error: null, ranMs: null });
 
