@@ -14,7 +14,21 @@ import process from 'node:process';
  * mid-write cannot leave a half-written plan file behind.
  */
 
-const DATA_DIR = path.resolve(process.cwd(), '.data');
+/**
+ * Where plans live.
+ *
+ * Locally this is a file beside the code. On Lambda the deployment package is read-only,
+ * so REMEDIATION_STORE_DIR points at /tmp - writable, and shared by every invocation on
+ * the same container.
+ *
+ * The trade-off is stated rather than hidden: /tmp does not survive a cold start, so an
+ * approval can be lost if a container is recycled between approving and executing. The
+ * plan is rebuilt from the current issues in that case, and nothing unsafe happens - the
+ * execution path re-validates everything against AWS regardless. Making approvals durable
+ * means a real store (DynamoDB, or SSM Advanced tier since the largest plan is ~7 KB),
+ * which is a cost this demo does not need to carry.
+ */
+const DATA_DIR = path.resolve(process.env.REMEDIATION_STORE_DIR || path.join(process.cwd(), '.data'));
 const STORE_PATH = path.join(DATA_DIR, 'remediation-plans.json');
 
 let cache = null;

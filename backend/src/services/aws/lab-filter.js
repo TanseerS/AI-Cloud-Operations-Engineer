@@ -47,6 +47,7 @@ export function matchesNamingConvention(name) {
   // The automation's own resources use the same prefix but are not part of the lab.
   if (
     /^(?:\/aws\/lambda\/)?aicoe-lab-(?:autonomous-manager|automation-role|scheduler-role|autonomous-check)$/.test(name) ||
+    /^(?:\/aws\/lambda\/)?aicoe-(?:backend|api)\b/.test(name) ||
     name.startsWith(`/${PREFIX}/automation/`)
   ) {
     return false;
@@ -60,8 +61,19 @@ export function matchesNamingConvention(name) {
   );
 }
 
+export const ENVIRONMENT_TAG_KEY = 'Environment';
+export const LAB_ENVIRONMENT = 'lab';
+
+/**
+ * Both tags are required.
+ *
+ * Project alone is not enough once the project has production infrastructure of its own:
+ * the deployed API carries Project=ai-cloud-operations-engineer too, and matching on that
+ * alone would put the backend inside the environment it is supposed to be managing.
+ */
 export function matchesLabTags(tags) {
-  return toTagMap(tags)[LAB_TAG_KEY] === LAB_TAG_VALUE;
+  const map = toTagMap(tags);
+  return map[LAB_TAG_KEY] === LAB_TAG_VALUE && map[ENVIRONMENT_TAG_KEY] === LAB_ENVIRONMENT;
 }
 
 /**
@@ -115,7 +127,10 @@ export function classifyResource({ arn, name, tags }, index) {
     return { isLabResource: false, reasons: [], excluded: 'automation-component' };
   }
 
-  if (arn && index?.arns?.has(arn)) reasons.push('tag-index');
+  // The index is built from the Project tag alone, so membership is confirmed against
+  // the resource's full tag set rather than trusting the index on its own.
+  const effectiveTags = { ...toTagMap(indexedTags), ...toTagMap(tags) };
+  if (arn && index?.arns?.has(arn) && matchesLabTags(effectiveTags)) reasons.push('tag-index');
   if (matchesLabTags(tags)) reasons.push('resource-tags');
   if (matchesNamingConvention(name)) reasons.push('naming-convention');
 

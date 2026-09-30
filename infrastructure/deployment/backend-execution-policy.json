@@ -1,0 +1,97 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DiscoveryAndAnalysisListOperations",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:ListFunctions",
+        "logs:DescribeLogGroups",
+        "ssm:DescribeParameters",
+        "iam:ListRoles",
+        "tag:GetResources",
+        "cloudwatch:GetMetricData",
+        "ce:GetCostAndUsage"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ApiGatewayDiscoveryReadOnly",
+      "Effect": "Allow",
+      "Action": "apigateway:GET",
+      "Resource": [
+        "arn:aws:apigateway:us-east-1::/apis",
+        "arn:aws:apigateway:us-east-1::/apis/*"
+      ]
+    },
+    {
+      "Sid": "LabResourceReads",
+      "Effect": "Allow",
+      "Action": [ "lambda:GetFunctionConfiguration", "lambda:ListTags" ],
+      "Resource": "arn:aws:lambda:us-east-1:303670280486:function:aicoe-lab-*"
+    },
+    {
+      "Sid": "LabLogReads",
+      "Effect": "Allow",
+      "Action": [ "logs:FilterLogEvents", "logs:ListTagsForResource" ],
+      "Resource": "arn:aws:logs:us-east-1:303670280486:log-group:/aws/lambda/aicoe-lab-*"
+    },
+    {
+      "Sid": "LabParameterReads",
+      "Effect": "Allow",
+      "Action": [ "ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath", "ssm:ListTagsForResource" ],
+      "Resource": "arn:aws:ssm:us-east-1:303670280486:parameter/aicoe-lab/*"
+    },
+    {
+      "Sid": "LabRoleReads",
+      "Effect": "Allow",
+      "Action": [ "iam:ListRoleTags", "iam:ListRolePolicies", "iam:ListAttachedRolePolicies" ],
+      "Resource": "arn:aws:iam::303670280486:role/aicoe-lab-*"
+    },
+    {
+      "Sid": "LabRemediationWritesOnly",
+      "Effect": "Allow",
+      "Action": "lambda:UpdateFunctionConfiguration",
+      "Resource": [
+        "arn:aws:lambda:us-east-1:303670280486:function:aicoe-lab-function",
+        "arn:aws:lambda:us-east-1:303670280486:function:aicoe-lab-error-function"
+      ]
+    },
+    {
+      "Sid": "LabRetentionWritesOnly",
+      "Effect": "Allow",
+      "Action": [ "logs:PutRetentionPolicy", "logs:DeleteRetentionPolicy" ],
+      "Resource": [
+        "arn:aws:logs:us-east-1:303670280486:log-group:/aws/lambda/aicoe-lab-function:*",
+        "arn:aws:logs:us-east-1:303670280486:log-group:/aws/lambda/aicoe-lab-error-function:*"
+      ]
+    },
+    {
+      "Sid": "AutomationAuditWriteOnly",
+      "Effect": "Allow",
+      "Action": "ssm:PutParameter",
+      "Resource": "arn:aws:ssm:us-east-1:303670280486:parameter/aicoe-lab/automation/state"
+    },
+    {
+      "Sid": "InvokeConfiguredBedrockModelsOnly",
+      "Effect": "Allow",
+      "Action": [ "bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream" ],
+      "Resource": [
+        "arn:aws:bedrock:us-east-1:303670280486:inference-profile/us.amazon.nova-pro-v1:0",
+        "arn:aws:bedrock:us-east-1:303670280486:inference-profile/us.amazon.nova-lite-v1:0",
+        "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-pro-v1:0",
+        "arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-pro-v1:0",
+        "arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-pro-v1:0",
+        "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0",
+        "arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-lite-v1:0",
+        "arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-lite-v1:0"
+      ]
+    },
+    {
+      "Sid": "WriteOwnLogs",
+      "Effect": "Allow",
+      "Action": [ "logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents" ],
+      "Resource": "arn:aws:logs:us-east-1:303670280486:log-group:/aws/lambda/aicoe-backend:*"
+    }
+  ]
+}

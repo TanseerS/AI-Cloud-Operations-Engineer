@@ -19,6 +19,7 @@ reliability problems, and proposes or applies fixes.
 | Idempotent lab reset | Done |
 | Autonomous scheduled lab management | Done |
 | Unified operations dashboard | Done |
+| Backend deployed to AWS | Done |
 | Reset mechanism | Not started |
 | Detection / remediation agent | Not started |
 
@@ -203,6 +204,12 @@ manages. See [docs/autonomous-lab-management.md](docs/autonomous-lab-management.
 
 Five intentional AWS issues in `us-east-1` for the agent to find. See
 [docs/lab-environment.md](docs/lab-environment.md).
+
+## Deployment
+
+The backend runs as an Express app on Lambda behind an API Gateway HTTP API. The public
+endpoint is `https://fo7occiuh3.execute-api.us-east-1.amazonaws.com`. See [docs/deployment.md](docs/deployment.md) for the
+architecture, the least-privilege role, the configuration surface and the build steps.
 
 ## AWS account
 

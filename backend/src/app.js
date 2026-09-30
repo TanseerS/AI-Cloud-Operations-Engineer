@@ -4,6 +4,7 @@ import helmet from 'helmet';
 
 import config from './config/index.js';
 import apiRouter from './routes/index.js';
+import { getHealth } from './services/liveness.service.js';
 import requestLogger from './middleware/request-logger.js';
 import notFound from './middleware/not-found.js';
 import errorHandler from './middleware/error-handler.js';
@@ -26,8 +27,10 @@ export function createApp() {
   app.use(express.json({ limit: '256kb' }));
   app.use(requestLogger);
 
-  // Unversioned alias so uptime checks and load balancers have a stable path.
-  app.get('/health', (_req, res) => res.redirect(307, '/api/v1/health'));
+  // Unversioned alias so uptime checks have a stable path. It answers directly rather
+  // than redirecting, and makes no AWS call, so it stays valid even when the account is
+  // unreachable.
+  app.get('/health', (_req, res) => res.status(200).json(getHealth()));
 
   app.use('/api/v1', apiRouter);
 
