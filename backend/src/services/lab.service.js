@@ -5,6 +5,7 @@ import { getHealthAnalysis } from './health.service.js';
 import { evaluateSafety, REQUIRED_TAGS } from './remediation/safety.js';
 import { captureStateFor, executorFor } from './remediation/executors.js';
 import { loadBaseline, toRestoreTargets } from './lab/baseline.js';
+import { recordRun, readAutomationState } from './lab/audit.js';
 
 /**
  * Lab reset.
@@ -51,50 +52,50 @@ function summarise(evaluations) {
   };
 }
 
-async function performReset() {
-  const startedAt = new Date().toISOString();
-  const errors = [];
-
+/**
+ * Phase 1 - validateLab.
+ *
+ * Loads the baseline and discovers the lab. Returns what may be managed and why anything
+ * was excluded. Makes no AWS change.
+ */
+export async function validateLab() {
   const baseline = await loadBaseline();
   if (!baseline.available) {
-    return {
-      status: 'failed',
-      startedAt,
-      completedAt: new Date().toISOString(),
-      alreadyAtBaseline: false,
-      changesApplied: [],
-      errors: [{ stage: 'baseline', message: 'The lab baseline could not be read.', ...baseline.error }],
-    };
+    return { valid: false, reason: 'The lab baseline could not be read.', error: baseline.error, targets: [], derived: [] };
   }
 
   const { restorable, derived } = toRestoreTargets(baseline.issues);
-
-  // Targets come from discovery, which only returns resources carrying the lab tags or
-  // matching the lab naming convention. Nothing here originates with the caller.
   const inventory = await discoverResources();
   const resources = (inventory.services ?? [])
     .filter((entry) => entry.status !== 'failed')
     .flatMap((entry) => entry.resources ?? []);
   const byName = new Map(resources.map((resource) => [resource.name, resource]));
 
-  if (inventory.partial) {
-    errors.push({
-      stage: 'discovery',
-      message: 'Discovery was partial, so some baseline targets may not have been evaluated.',
-    });
-  }
+  return {
+    valid: true,
+    baseline,
+    inventory,
+    resources,
+    byName,
+    targets: restorable,
+    derived,
+    discoveryPartial: Boolean(inventory.partial),
+  };
+}
 
-  const evaluations = [];
+/**
+ * Phase 2 - inspectState. Reads the live value of every managed attribute and checks the
+ * target is still a tagged lab resource. Makes no AWS change.
+ */
+export async function inspectState({ targets, byName }) {
+  const observations = [];
 
-  for (const target of restorable) {
+  for (const target of targets) {
     const resource = byName.get(target.resourceName);
 
     if (!resource) {
-      evaluations.push({
-        ...publicTarget(target),
-        status: 'skipped',
-        reason: 'The resource is not present in the discovered lab inventory, so it was not touched.',
-      });
+      observations.push({ target, resource: null, status: 'skipped',
+        reason: 'The resource is not present in the discovered lab inventory, so it was not touched.' });
       continue;
     }
 
@@ -106,76 +107,126 @@ async function performReset() {
     });
 
     if (!safety.safe) {
-      evaluations.push({
-        ...publicTarget(target),
-        status: 'skipped',
-        reason: `Safety validation failed: ${safety.failedChecks.join(', ')}`,
-        safetyChecks: safety.checks,
-      });
+      observations.push({ target, resource, status: 'skipped',
+        reason: `Safety validation failed: ${safety.failedChecks.join(', ')}`, safetyChecks: safety.checks });
       continue;
     }
 
-    let currentState;
     try {
-      currentState = await captureStateFor(target.service, target.resourceName);
+      const state = await captureStateFor(target.service, target.resourceName);
+      observations.push({ target, resource, status: 'observed', observedValue: state?.[target.stateField] ?? null });
     } catch (error) {
-      const described = describeAwsError(error);
-      errors.push({ stage: 'read', issueId: target.issueId, ...described });
-      evaluations.push({
-        ...publicTarget(target),
-        status: 'failed',
-        reason: `Could not read the current configuration: ${described.message}`,
-      });
+      observations.push({ target, resource, status: 'unreadable', error: describeAwsError(error) });
+    }
+  }
+
+  return observations;
+}
+
+/**
+ * Phase 3 - calculateRequiredChanges. Pure comparison against the baseline; this is what
+ * makes the whole operation idempotent.
+ */
+export function calculateRequiredChanges(observations) {
+  const required = [];
+  const alreadyAtBaseline = [];
+
+  for (const observation of observations) {
+    if (observation.status !== 'observed') continue;
+    if (compareValue(observation.observedValue, observation.target.expectedValue)) {
+      alreadyAtBaseline.push(observation);
+    } else {
+      required.push(observation);
+    }
+  }
+
+  return { required, alreadyAtBaseline, resetRequired: required.length > 0 };
+}
+
+async function performReset({ trigger = 'manual' } = {}) {
+  const startedAt = new Date().toISOString();
+  const errors = [];
+
+  const validation = await validateLab();
+  if (!validation.valid) {
+    return {
+      status: 'failed',
+      trigger,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      alreadyAtBaseline: false,
+      changesApplied: [],
+      errors: [{ stage: 'baseline', message: validation.reason, ...(validation.error ?? {}) }],
+    };
+  }
+
+  const { baseline, targets: restorable, derived, byName } = validation;
+  if (validation.discoveryPartial) {
+    errors.push({
+      stage: 'discovery',
+      message: 'Discovery was partial, so some baseline targets may not have been evaluated.',
+    });
+  }
+
+  const observations = await inspectState({ targets: restorable, byName });
+  const { required } = calculateRequiredChanges(observations);
+  const requiredIds = new Set(required.map((entry) => entry.target.issueId));
+
+  const evaluations = [];
+
+  for (const observation of observations) {
+    const target = observation.target;
+
+    if (observation.status === 'skipped') {
+      evaluations.push({ ...publicTarget(target), status: 'skipped', reason: observation.reason,
+        ...(observation.safetyChecks ? { safetyChecks: observation.safetyChecks } : {}) });
       continue;
     }
 
-    const observed = currentState?.[target.stateField] ?? null;
+    if (observation.status === 'unreadable') {
+      errors.push({ stage: 'read', issueId: target.issueId, ...observation.error });
+      evaluations.push({ ...publicTarget(target), status: 'failed',
+        reason: `Could not read the current configuration: ${observation.error.message}` });
+      continue;
+    }
 
-    // The idempotency check: nothing is written when the value already matches.
-    if (compareValue(observed, target.expectedValue)) {
-      evaluations.push({
-        ...publicTarget(target),
-        status: 'already-at-baseline',
-        observedValue: observed,
-        reason: 'Already at the baseline value. No AWS call was made.',
-      });
+    if (!requiredIds.has(target.issueId)) {
+      evaluations.push({ ...publicTarget(target), status: 'already-at-baseline',
+        observedValue: observation.observedValue,
+        reason: 'Already at the baseline value. No AWS call was made.' });
       continue;
     }
 
     const executor = executorFor(target.actionType);
     if (!executor) {
-      evaluations.push({
-        ...publicTarget(target),
-        status: 'skipped',
-        reason: `No executor is registered for ${target.actionType}.`,
-      });
+      evaluations.push({ ...publicTarget(target), status: 'skipped',
+        reason: `No executor is registered for ${target.actionType}.` });
       continue;
     }
 
+    // Phase 4 - applyChanges. Only reached for attributes that actually differ.
     try {
       const execution = await executor(target.parameters);
       const afterState = await captureStateFor(target.service, target.resourceName);
       const afterValue = afterState?.[target.stateField] ?? null;
+      const restored = compareValue(afterValue, target.expectedValue);
 
       evaluations.push({
         ...publicTarget(target),
-        status: compareValue(afterValue, target.expectedValue) ? 'restored' : 'failed',
-        beforeValue: observed,
+        status: restored ? 'restored' : 'failed',
+        beforeValue: observation.observedValue,
         afterValue,
         awsOperation: execution.awsOperation,
-        reason: compareValue(afterValue, target.expectedValue)
+        reason: restored
           ? 'Restored to the baseline value.'
           : 'The AWS call succeeded but the resource does not hold the baseline value.',
       });
     } catch (error) {
       const described = describeAwsError(error);
       errors.push({ stage: 'write', issueId: target.issueId, ...described });
-      evaluations.push({
-        ...publicTarget(target),
-        status: 'failed',
-        beforeValue: observed,
-        reason: `The AWS operation failed: ${described.message}`,
-      });
+      evaluations.push({ ...publicTarget(target), status: 'failed',
+        beforeValue: observation.observedValue,
+        reason: `The AWS operation failed: ${described.message}` });
     }
   }
 
@@ -184,11 +235,12 @@ async function performReset() {
 
   // Verification: re-read the resources and re-run the detector that found the issues in
   // the first place. A reset is only successful if the lab is broken again.
-  const verification = await verifyBaseline({ restorable, derived, evaluations });
+  const verification = await verify({ restorable, derived, evaluations });
 
   const completedAt = new Date().toISOString();
   const record = {
     status: counts.failed > 0 ? 'failed' : 'reset',
+    trigger,
     startedAt,
     completedAt,
     durationMs: new Date(completedAt) - new Date(startedAt),
@@ -221,6 +273,10 @@ async function performReset() {
 
   history.unshift(record);
   if (history.length > HISTORY_LIMIT) history.length = HISTORY_LIMIT;
+
+  // Shared across the API process and the scheduled Lambda; a failure to write it must
+  // not change the outcome of the reset itself.
+  record.audit = await recordRun(record);
   return record;
 }
 
@@ -238,7 +294,7 @@ function publicTarget(target) {
   };
 }
 
-async function verifyBaseline({ restorable, derived, evaluations }) {
+export async function verify({ restorable, derived, evaluations }) {
   const checks = [];
 
   // 1. Read every managed attribute back from AWS.
@@ -321,7 +377,7 @@ async function verifyBaseline({ restorable, derived, evaluations }) {
  * one, so two requests can never write to the same resource at the same time and the
  * second caller still gets a real result.
  */
-export async function resetLab() {
+export async function resetLab({ trigger = 'manual' } = {}) {
   if (activeReset) {
     // Capture the reference first: the in-flight run clears activeReset in its finally
     // block, so reading it again after the await would dereference null.
@@ -331,22 +387,93 @@ export async function resetLab() {
   }
 
   const startedAt = new Date().toISOString();
-  const promise = performReset().finally(() => {
+  const promise = performReset({ trigger }).finally(() => {
     activeReset = null;
   });
   activeReset = { startedAt, promise };
   return promise;
 }
 
-/** Baseline summary and last reset, for the dashboard. Makes no AWS change. */
+/**
+ * Overall lab state derived from the live values, not from a stored flag.
+ *   broken  - every managed attribute matches the intentionally broken baseline
+ *   fixed   - none of them do
+ *   partial - some do
+ *   unknown - the lab could not be read
+ */
+function deriveLabState({ atBaseline, offBaseline, unreadable, total }) {
+  if (total === 0 || unreadable === total) return 'unknown';
+  if (offBaseline === 0) return 'broken';
+  if (atBaseline === 0) return 'fixed';
+  return 'partial';
+}
+
+/** Baseline summary, live lab state and automation history. Makes no AWS change. */
 export async function getLabStatus() {
-  const baseline = await loadBaseline();
-  const { restorable, derived } = baseline.available
-    ? toRestoreTargets(baseline.issues)
-    : { restorable: [], derived: [] };
+  const validation = await validateLab();
+  const baseline = validation.baseline ?? { available: false, issues: [], path: null, error: validation.error };
+  const restorable = validation.targets ?? [];
+  const derived = validation.derived ?? [];
+
+  // Live comparison, so the reported state is measured rather than remembered.
+  const observations = validation.valid
+    ? await inspectState({ targets: restorable, byName: validation.byName })
+    : [];
+  const { required, alreadyAtBaseline } = calculateRequiredChanges(observations);
+  const unreadable = observations.filter((entry) => entry.status !== 'observed').length;
+  const labState = deriveLabState({
+    atBaseline: alreadyAtBaseline.length,
+    offBaseline: required.length,
+    unreadable,
+    total: observations.length,
+  });
+
+  const automation = await readAutomationState();
+  const lastCheckAt = automation.state?.lastAutonomousCheck?.completedAt ?? null;
+  const intervalMs = config.automation.intervalHours * 3600 * 1000;
+
+  let issueCount = null;
+  try {
+    const health = await getHealthAnalysis();
+    issueCount = health.summary?.totalIssues ?? null;
+  } catch {
+    issueCount = null;
+  }
 
   return {
     region: config.aws.region,
+    labState,
+    matchesBaseline: labState === 'broken',
+    managedResourceCount: restorable.length,
+    issueCount,
+    stateDetail: {
+      atBaseline: alreadyAtBaseline.length,
+      offBaseline: required.length,
+      unreadable,
+      offBaselineAttributes: required.map((entry) => ({
+        issueId: entry.target.issueId,
+        resourceName: entry.target.resourceName,
+        attribute: entry.target.attribute,
+        observedValue: entry.observedValue,
+        baselineValue: entry.target.expectedValue,
+      })),
+    },
+    automation: {
+      enabled: true,
+      trigger: 'AWS EventBridge Scheduler',
+      intervalHours: config.automation.intervalHours,
+      scheduleName: config.automation.scheduleName,
+      functionName: config.automation.functionName,
+      usesBedrock: false,
+      lastAutonomousCheck: automation.state?.lastAutonomousCheck ?? null,
+      lastAutonomousReset: automation.state?.lastAutonomousReset ?? null,
+      lastManualReset: automation.state?.lastManualReset ?? null,
+      // Derived from the last recorded run, not invented: null until one has happened.
+      nextCheckEstimatedAt: lastCheckAt ? new Date(new Date(lastCheckAt).getTime() + intervalMs).toISOString() : null,
+      stateSource: config.automation.statePath,
+      stateReadable: automation.available,
+      history: automation.state?.history ?? [],
+    },
     baseline: {
       available: baseline.available,
       source: baseline.path ?? null,

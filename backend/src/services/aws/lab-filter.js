@@ -24,11 +24,31 @@ import { getTaggingClient, toTagMap, describeAwsError } from './clients.js';
 export const LAB_TAG_KEY = 'Project';
 export const LAB_TAG_VALUE = 'ai-cloud-operations-engineer';
 
+/**
+ * The application's own automation carries the project tags, because it belongs to the
+ * project - but it is not part of the environment being demonstrated. Including it would
+ * mean the dashboard reported findings against the scheduler that keeps the lab broken,
+ * and the reset baseline has no entry for them, so nothing could ever resolve them.
+ *
+ * Resources tagged Component=automation are therefore excluded from lab discovery.
+ */
+export const COMPONENT_TAG_KEY = 'Component';
+export const AUTOMATION_COMPONENT = 'automation';
+
+export function isAutomationComponent(tags) {
+  return toTagMap(tags)[COMPONENT_TAG_KEY] === AUTOMATION_COMPONENT;
+}
+
 const PREFIX = config.aws.labPrefix;
 
 /** Name shapes our convention produces: bare names, log-group paths, SSM paths. */
 export function matchesNamingConvention(name) {
   if (typeof name !== 'string' || name.length === 0) return false;
+  // The automation's own resources use the same prefix but are not part of the lab.
+  if (/^(?:\/aws\/lambda\/)?aicoe-lab-(?:autonomous-manager|automation-role|scheduler-role|autonomous-check)$/.test(name)) {
+    return false;
+  }
+
   return (
     name === PREFIX ||
     name.startsWith(`${PREFIX}-`) ||
@@ -85,6 +105,12 @@ export async function buildLabIndex() {
  */
 export function classifyResource({ arn, name, tags }, index) {
   const reasons = [];
+
+  // The tool's own scheduling infrastructure is excluded before anything else.
+  const indexedTags = arn ? index?.tagsByArn?.get(arn) : undefined;
+  if (isAutomationComponent(tags) || isAutomationComponent(indexedTags)) {
+    return { isLabResource: false, reasons: [], excluded: 'automation-component' };
+  }
 
   if (arn && index?.arns?.has(arn)) reasons.push('tag-index');
   if (matchesLabTags(tags)) reasons.push('resource-tags');

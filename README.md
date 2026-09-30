@@ -17,6 +17,7 @@ reliability problems, and proposes or applies fixes.
 | Remediation planning & approval | Done |
 | Remediation execution & verification | Done |
 | Idempotent lab reset | Done |
+| Autonomous scheduled lab management | Done |
 | Reset mechanism | Not started |
 | Detection / remediation agent | Not started |
 
@@ -39,7 +40,8 @@ backend/                 Node + Express API - the only tier that will hold AWS a
       health/            Fact model and the deterministic detection rules
       ai/                Bedrock client, analysis schema, context builder, prompt
       remediation/       Action allowlist, safety gate, plan storage, executors
-      lab/               Baseline reader and restore-target mapping
+      lab/               Baseline reader, restore-target mapping, shared audit
+    lambda/              Scheduled autonomous lab manager entry point
     middleware/          Request logging, 404, error to response
     lib/                 Typed errors and small helpers
 frontend/                React + Vite dashboard - never holds AWS credentials
@@ -60,6 +62,7 @@ frontend/                React + Vite dashboard - never holds AWS credentials
     styles/              Design tokens, base reset, component styles
 docs/                    Project documentation
 infrastructure/lab/      AWS lab sources and issue baselines
+infrastructure/automation/  Least-privilege IAM policies for the scheduler
 ```
 
 ## Running locally
@@ -103,6 +106,8 @@ Base path `/api/v1`. Only health is implemented.
 | POST | `/api/v1/remediation/plans/:id/execute` | Available - applies and verifies |
 | GET | `/api/v1/lab/status` | Available - baseline summary |
 | POST | `/api/v1/lab/reset` | Available - restores the broken baseline |
+
+A scheduled AWS Lambda calls the same reset service every 6 hours.
 | POST | `/api/v1/lab/reset` | 501 |
 
 ```console
@@ -184,6 +189,13 @@ See [docs/remediation-execution.md](docs/remediation-execution.md).
 managed setting against the baseline recorded at lab setup and writes back only what
 differs, so resetting an already-broken lab makes no AWS calls at all. No cooldown —
 concurrency is handled server-side. See [docs/lab-reset.md](docs/lab-reset.md).
+
+## Autonomous lab management
+
+EventBridge Scheduler invokes a Lambda every 6 hours that calls the *same* reset service
+as the manual endpoint. It is deterministic — the execution role holds no Bedrock
+permission at all — idempotent, and scoped by IAM to the lab resources the baseline
+manages. See [docs/autonomous-lab-management.md](docs/autonomous-lab-management.md).
 
 ## The lab
 

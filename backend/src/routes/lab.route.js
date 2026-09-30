@@ -31,7 +31,7 @@ router.get(
 router.post(
   '/reset',
   asyncHandler(async (_req, res) => {
-    res.status(200).json(await resetLab());
+    res.status(200).json(await resetLab({ trigger: 'manual' }));
   }),
 );
 

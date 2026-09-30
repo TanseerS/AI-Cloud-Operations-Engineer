@@ -10,7 +10,8 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "build:lambda": "esbuild src/lambda/autonomous-lab-manager.js --bundle --platform=node --target=node20 --format=esm --external:@aws-sdk/* --banner:js=\"import{createRequire as __cr}from'module';const require=__cr(import.meta.url);\" --outfile=../build/lambda/index.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-apigatewayv2": "^3.1143.0",
@@ -26,5 +27,8 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "helmet": "^8.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }

@@ -1,0 +1,103 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DiscoverLabListOperations",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:ListFunctions",
+        "logs:DescribeLogGroups",
+        "ssm:DescribeParameters",
+        "iam:ListRoles",
+        "tag:GetResources",
+        "cloudwatch:GetMetricData"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DiscoverApiGatewayReadOnly",
+      "Effect": "Allow",
+      "Action": "apigateway:GET",
+      "Resource": [
+        "arn:aws:apigateway:us-east-1::/apis",
+        "arn:aws:apigateway:us-east-1::/apis/*"
+      ]
+    },
+    {
+      "Sid": "ReadLabLambdaConfiguration",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:GetFunctionConfiguration",
+        "lambda:ListTags"
+      ],
+      "Resource": "arn:aws:lambda:us-east-1:303670280486:function:aicoe-lab-*"
+    },
+    {
+      "Sid": "ReadLabLogGroups",
+      "Effect": "Allow",
+      "Action": [
+        "logs:FilterLogEvents",
+        "logs:ListTagsForResource"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:303670280486:log-group:/aws/lambda/aicoe-lab-*"
+    },
+    {
+      "Sid": "ReadLabBaselineParameters",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:GetParametersByPath",
+        "ssm:ListTagsForResource"
+      ],
+      "Resource": "arn:aws:ssm:us-east-1:303670280486:parameter/aicoe-lab/*"
+    },
+    {
+      "Sid": "ReadLabRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:ListRoleTags",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies"
+      ],
+      "Resource": "arn:aws:iam::303670280486:role/aicoe-lab-*"
+    },
+    {
+      "Sid": "RestoreLabLambdaConfiguration",
+      "Effect": "Allow",
+      "Action": "lambda:UpdateFunctionConfiguration",
+      "Resource": [
+        "arn:aws:lambda:us-east-1:303670280486:function:aicoe-lab-function",
+        "arn:aws:lambda:us-east-1:303670280486:function:aicoe-lab-error-function"
+      ]
+    },
+    {
+      "Sid": "RestoreLabLogRetention",
+      "Effect": "Allow",
+      "Action": [
+        "logs:PutRetentionPolicy",
+        "logs:DeleteRetentionPolicy"
+      ],
+      "Resource": [
+        "arn:aws:logs:us-east-1:303670280486:log-group:/aws/lambda/aicoe-lab-function:*",
+        "arn:aws:logs:us-east-1:303670280486:log-group:/aws/lambda/aicoe-lab-error-function:*"
+      ]
+    },
+    {
+      "Sid": "WriteAutomationAuditRecordOnly",
+      "Effect": "Allow",
+      "Action": "ssm:PutParameter",
+      "Resource": "arn:aws:ssm:us-east-1:303670280486:parameter/aicoe-lab/automation/state"
+    },
+    {
+      "Sid": "WriteOwnLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:303670280486:log-group:/aws/lambda/aicoe-lab-autonomous-manager:*"
+    }
+  ]
+}

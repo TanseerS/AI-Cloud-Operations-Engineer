@@ -86,6 +86,16 @@ export const config = Object.freeze({
     cacheTtlSeconds: readPort('BEDROCK_CACHE_TTL_SECONDS', 600),
     minIntervalSeconds: readPort('BEDROCK_MIN_INTERVAL_SECONDS', 20),
   },
+  automation: {
+    // The scheduled lab check. Interval lives here rather than in the deploy script, so
+    // the schedule and anything that reports on it read the same number.
+    intervalHours: readPort('LAB_AUTOMATION_INTERVAL_HOURS', 6),
+    scheduleName: readString('LAB_AUTOMATION_SCHEDULE_NAME', 'aicoe-lab-autonomous-check'),
+    functionName: readString('LAB_AUTOMATION_FUNCTION_NAME', 'aicoe-lab-autonomous-manager'),
+    // Shared audit record. The scheduled Lambda writes it; the API reads it, so the
+    // dashboard can report autonomous runs it never saw.
+    statePath: readString('LAB_AUTOMATION_STATE_PATH', '/aicoe-lab/automation/state'),
+  },
   http: {
     corsOrigins: readList('CORS_ORIGINS', ['http://localhost:5180', 'http://localhost:4180']),
   },

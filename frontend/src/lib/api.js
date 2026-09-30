@@ -75,7 +75,9 @@ export const api = {
     request(`/remediation/plans/${encodeURIComponent(id)}/approve`, { method: 'POST', timeoutMs: 20000 }),
   // Execution re-discovers AWS, applies the change, waits for it to settle and re-runs
   // the detector, so it needs a long window.
-  labStatus: () => request('/lab/status', { timeoutMs: 20000 }),
+  // Compares every managed setting against the baseline and counts current issues,
+  // so it costs a discovery pass plus a health analysis.
+  labStatus: () => request('/lab/status', { timeoutMs: 60000 }),
   // Takes no body: targets come from the baseline and from AWS discovery, never the caller.
   resetLab: () => request('/lab/reset', { method: 'POST', timeoutMs: 180000 }),
   executePlan: (id) =>

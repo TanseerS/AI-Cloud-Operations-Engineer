@@ -8,7 +8,7 @@ import StatusIndicator from '../ui/StatusIndicator.jsx';
 import useApiResource from '../../hooks/useApiResource.js';
 import { useRefresh } from '../../context/RefreshContext.jsx';
 import { api } from '../../lib/api.js';
-import { formatRelative } from '../../lib/format.js';
+import { formatRelative, formatDuration } from '../../lib/format.js';
 
 /**
  * Lab reset.
@@ -18,6 +18,14 @@ import { formatRelative } from '../../lib/format.js';
  * already defines, on resources the backend discovered as belonging to this lab. It
  * creates and deletes nothing.
  */
+const LAB_STATE_LABEL = {
+  checking: 'Checking lab state',
+  broken: 'Intentionally broken',
+  fixed: 'Fixed',
+  partial: 'Partially fixed',
+  unknown: 'Unknown',
+};
+
 export function ResetLabCard() {
   const { refreshToken, refreshAll } = useRefresh();
   const status = useApiResource(api.labStatus, { refreshToken });
@@ -46,6 +54,12 @@ export function ResetLabCard() {
 
   const managed = status.data?.baseline?.managedAttributes ?? [];
   const alreadyAtBaseline = result?.alreadyAtBaseline;
+  const automation = status.data?.automation;
+  // Until the status call returns, say so. Rendering "Unknown / off" while the check is
+  // still running would state the opposite of the truth.
+  const loadingStatus = status.status === 'loading';
+  const labState = loadingStatus ? 'checking' : (status.data?.labState ?? 'unknown');
+  const pending = loadingStatus ? 'checking' : null;
 
   return (
     <Card className="lab-reset">
@@ -59,11 +73,72 @@ export function ResetLabCard() {
         }
       />
       <CardBody>
+        {/* A quiet strip: state first, then who keeps it that way. */}
+        <div className="lab-strip">
+          <span className={`lab-strip__state lab-strip__state--${labState}`}>
+            <span className="lab-strip__dot" />
+            {LAB_STATE_LABEL[labState] ?? 'Unknown'}
+          </span>
+
+          <span className="lab-strip__divider" aria-hidden="true" />
+
+          <span className="lab-strip__item">
+            <span className="lab-strip__key">Automation</span>
+            <span className="lab-strip__value">
+              {pending ?? (automation?.enabled ? `every ${automation.intervalHours}h` : 'off')}
+            </span>
+          </span>
+          <span className="lab-strip__item">
+            <span className="lab-strip__key">Last check</span>
+            <span className="lab-strip__value">
+              {pending ??
+                (automation?.lastAutonomousCheck?.completedAt
+                  ? formatRelative(automation.lastAutonomousCheck.completedAt)
+                  : 'not yet run')}
+            </span>
+          </span>
+          <span className="lab-strip__item">
+            <span className="lab-strip__key">Last reset</span>
+            <span className="lab-strip__value">
+              {pending ??
+                (automation?.lastAutonomousReset?.completedAt || automation?.lastManualReset?.completedAt
+                ? formatRelative(
+                    [automation.lastAutonomousReset?.completedAt, automation.lastManualReset?.completedAt]
+                      .filter(Boolean)
+                      .sort()
+                      .at(-1),
+                  )
+                : 'none recorded')}
+            </span>
+          </span>
+          <span className="lab-strip__item">
+            <span className="lab-strip__key">Next check</span>
+            <span className="lab-strip__value">
+              {pending ??
+                (automation?.nextCheckEstimatedAt
+                  ? new Date(automation.nextCheckEstimatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : '—')}
+            </span>
+          </span>
+          <span className="lab-strip__item">
+            <span className="lab-strip__key">Managed</span>
+            <span className="lab-strip__value tabular">
+              {pending ??
+                `${status.data?.managedResourceCount ?? '—'} settings${
+                  status.data?.issueCount !== null && status.data?.issueCount !== undefined
+                    ? ` · ${status.data.issueCount} issues`
+                    : ''
+                }`}
+            </span>
+          </span>
+        </div>
+
         {!confirming && !running && !result ? (
           <div className="lab-reset__intro">
             <p className="lab-reset__text">
-              Compares each managed setting against the recorded baseline and writes back only the ones
-              that differ. No resources are created or deleted.
+              A scheduled AWS check does this every {automation?.intervalHours ?? 6} hours, and you can run it
+              now. Either way it compares each managed setting against the recorded baseline and writes back
+              only the ones that differ — no resources are created or deleted, and no model is consulted.
             </p>
             <Button variant="primary" onClick={() => setConfirming(true)} disabled={status.status === 'loading'}>
               <Icon name="reset" size={14} />
