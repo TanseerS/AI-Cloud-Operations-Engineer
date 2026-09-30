@@ -9,6 +9,7 @@ import OverviewPage from './pages/OverviewPage.jsx';
 import InfrastructurePage from './pages/InfrastructurePage.jsx';
 import CostPage from './pages/CostPage.jsx';
 import IssuesPage from './pages/IssuesPage.jsx';
+import AiAnalysisPage from './pages/AiAnalysisPage.jsx';
 import RemediationPage from './pages/RemediationPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 import { SkeletonCard } from './components/ui/Skeleton.jsx';
@@ -35,6 +36,7 @@ function Workspace() {
           />
           <Route path="/cost" element={<CostPage />} />
           <Route path="/issues" element={<IssuesPage />} />
+          <Route path="/ai" element={<AiAnalysisPage />} />
           <Route path="/remediation" element={<RemediationPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

@@ -57,6 +57,35 @@ export const config = Object.freeze({
     labPrefix: 'aicoe-lab',
     baselineParameterPath: '/aicoe-lab/baseline',
   },
+  bedrock: {
+    // Chosen by measurement, not preference. On 2026-09-30 every Anthropic model in
+    // this account failed 3/3 with INVALID_PAYMENT_INSTRUMENT (an AWS Marketplace
+    // subscription the account cannot complete), while Nova Pro and Nova Lite
+    // succeeded 3/3. Nova Pro is the most capable model this account can reliably
+    // invoke and it honours forced tool use, which is what the structured output
+    // depends on. Never hardcoded elsewhere: every caller reads it from here.
+    modelId: readString('BEDROCK_MODEL_ID', 'us.amazon.nova-pro-v1:0'),
+    // Tried in order when the primary is unavailable. Access is per-model in Bedrock
+    // and can fail for reasons unrelated to the request (marketplace subscription,
+    // regional access), so a verified fallback keeps the feature usable.
+    fallbackModelIds: readList('BEDROCK_FALLBACK_MODEL_IDS', [
+      'us.amazon.nova-lite-v1:0',
+      // Kept last so the feature picks it up automatically if the account's
+      // Anthropic subscription starts working again.
+      'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+    ]),
+    // Bedrock runtime region. Separate from the workload region because model
+    // availability differs by region.
+    region: readString('BEDROCK_REGION', readString('AWS_REGION', 'us-east-1')),
+    // Always set explicitly: an unset value reserves the model's maximum against the
+    // account's throughput quota and is a common cause of spurious throttling.
+    maxTokens: readPort('BEDROCK_MAX_TOKENS', 4096),
+    temperature: 0,
+    // Analysis is expensive enough to be deliberate: it runs on an explicit request,
+    // never on a page render, and a result is reused for this long.
+    cacheTtlSeconds: readPort('BEDROCK_CACHE_TTL_SECONDS', 600),
+    minIntervalSeconds: readPort('BEDROCK_MIN_INTERVAL_SECONDS', 20),
+  },
   http: {
     corsOrigins: readList('CORS_ORIGINS', ['http://localhost:5180', 'http://localhost:4180']),
   },

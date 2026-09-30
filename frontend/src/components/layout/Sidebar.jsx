@@ -9,6 +9,7 @@ export const NAV_ITEMS = [
   { to: '/architecture', label: 'Architecture', icon: 'architecture' },
   { to: '/cost', label: 'Cost', icon: 'cost' },
   { to: '/issues', label: 'Issues', icon: 'issues' },
+  { to: '/ai', label: 'AI analysis', icon: 'sparkle' },
   { to: '/remediation', label: 'Remediation', icon: 'remediation' },
 ];
 

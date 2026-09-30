@@ -24,7 +24,8 @@ router.get('/', (_req, res) => {
       infrastructure: { path: '/api/v1/infrastructure/resources', status: 'available' },
       architecture: { path: '/api/v1/architecture/graph', status: 'available' },
       costs: { path: '/api/v1/costs', status: 'available' },
-      bedrock: { path: '/api/v1/bedrock/analysis', status: 'planned' },
+      aiStatus: { path: '/api/v1/ai/status', status: 'available' },
+      aiAnalyze: { path: 'POST /api/v1/ai/analyze', status: 'available' },
       remediation: { path: '/api/v1/remediation', status: 'planned' },
       lab: { path: '/api/v1/lab/reset', status: 'planned' },
     },
@@ -35,7 +36,7 @@ router.use('/health', healthRoute);
 router.use('/infrastructure', infrastructureRoute);
 router.use('/architecture', architectureRoute);
 router.use('/costs', costRoute);
-router.use('/bedrock', bedrockRoute);
+router.use('/ai', bedrockRoute);
 router.use('/remediation', remediationRoute);
 router.use('/lab', labRoute);
 

@@ -13,8 +13,9 @@ reliability problems, and proposes or applies fixes.
 | Interactive architecture map | Done |
 | Cost analysis | Done |
 | CloudWatch health & issue detection | Done |
+| Bedrock AI analysis | Done |
 | Reset mechanism | Not started |
-| Bedrock reasoning | Not started |
+| Remediation & lab reset | Not started |
 | Detection / remediation agent | Not started |
 
 The application discovers the real AWS lab inventory end to end. The remaining analysis
@@ -34,6 +35,7 @@ backend/                 Node + Express API - the only tier that will hold AWS a
       cost/              Cost Explorer queries, period maths, service mapping
       cloudwatch/        Bounded metric and log collection, log redaction
       health/            Fact model and the deterministic detection rules
+      ai/                Bedrock client, analysis schema, context builder, prompt
     middleware/          Request logging, 404, error to response
     lib/                 Typed errors and small helpers
 frontend/                React + Vite dashboard - never holds AWS credentials
@@ -44,6 +46,7 @@ frontend/                React + Vite dashboard - never holds AWS credentials
     components/architecture/    Graph canvas, nodes, layout and detail panel
     components/cost/            Trend chart, service breakdown, cost drivers
     components/health/          Health score, severity tiles, issue cards, evidence
+    components/ai/              Model status, AI findings, recommendation groups
     context/             App-wide API health, polled once
     hooks/               Theme and API-resource hooks
     lib/                 Config and the single API client
@@ -87,7 +90,8 @@ Base path `/api/v1`. Only health is implemented.
 | GET | `/api/v1/architecture/graph` | Available - topology derived from discovery |
 | GET | `/api/v1/costs` | Available - Cost Explorer analysis |
 | GET | `/api/v1/health/analysis` | Available - CloudWatch health & findings |
-| GET | `/api/v1/bedrock/analysis` | 501 |
+| GET | `/api/v1/ai/status` | Available - model, region, policy (no Bedrock call) |
+| POST | `/api/v1/ai/analyze` | Available - Bedrock analysis |
 | POST | `/api/v1/remediation` | 501 |
 | POST | `/api/v1/lab/reset` | 501 |
 
@@ -139,6 +143,14 @@ make them different numbers. Billing data is never presented as live. See
 as **facts**, then runs deterministic rules over them to produce **issues** that cite the
 facts behind them. No model is involved. See
 [docs/health-analysis.md](docs/health-analysis.md).
+
+## AI analysis
+
+`POST /api/v1/ai/analyze` asks a Bedrock model, acting as an AWS Cloud Operations
+Engineer, to reason over the observations the application already collected. Model
+selection was measured rather than assumed, the response is schema-validated, and every
+issue and resource it names is checked against what was actually discovered — anything
+else is rejected before display. See [docs/ai-analysis.md](docs/ai-analysis.md).
 
 ## The lab
 

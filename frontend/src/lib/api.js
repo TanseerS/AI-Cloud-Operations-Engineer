@@ -59,6 +59,12 @@ export const api = {
   costs: () => request('/costs', { timeoutMs: 30000 }),
   // Health analysis fans out across discovery, CloudWatch metrics and logs.
   health: () => request('/health/analysis', { timeoutMs: 45000 }),
+  // Free: configuration and last-known state, no Bedrock call.
+  aiStatus: () => request('/ai/status'),
+  // POST on purpose. Analysis costs money, so it can never be triggered by a render,
+  // a prefetch or a crawler - only by someone deciding to run it.
+  aiAnalyze: ({ force = false } = {}) =>
+    request(`/ai/analyze${force ? '?force=true' : ''}`, { method: 'POST', timeoutMs: 120000 }),
 };
 
 export default api;
