@@ -1,0 +1,36 @@
+{
+    "issue_id": "aicoe-lab-issue-002",
+    "status": "active",
+    "category": "cost-efficiency",
+    "severity": "low",
+    "title": "CloudWatch log retention set to 10 years",
+    "target": {
+        "type": "aws_cloudwatch_log_group",
+        "name": "/aws/lambda/aicoe-lab-function",
+        "attribute": "retentionInDays"
+    },
+    "intended_value": 14,
+    "broken_value": 3653,
+    "unit": "days",
+    "description": "The log group for aicoe-lab-function retains logs for 3653 days (10 years), 260x longer than a stateless lab function needs, accruing CloudWatch Logs storage cost indefinitely.",
+    "detection": {
+        "primary": "logs:DescribeLogGroups -> retentionInDays",
+        "signal": "retentionInDays far above the organisational norm, or null (never expire)"
+    },
+    "remediation": {
+        "api": "logs:PutRetentionPolicy",
+        "parameters": {
+            "logGroupName": "/aws/lambda/aicoe-lab-function",
+            "retentionInDays": 14
+        },
+        "verification": "retentionInDays == 14"
+    },
+    "reset": {
+        "api": "logs:PutRetentionPolicy",
+        "parameters": {
+            "logGroupName": "/aws/lambda/aicoe-lab-function",
+            "retentionInDays": 3653
+        },
+        "verification": "retentionInDays == 3653"
+    }
+}

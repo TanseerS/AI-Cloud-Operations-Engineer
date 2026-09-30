@@ -1,0 +1,37 @@
+{
+    "issue_id": "aicoe-lab-issue-005",
+    "status": "active",
+    "category": "architecture-configuration",
+    "severity": "medium",
+    "title": "Function timeout 30x longer than its caller's integration timeout",
+    "target": {
+        "type": "aws_lambda_function",
+        "name": "aicoe-lab-error-function",
+        "attribute": "Timeout"
+    },
+    "intended_value": 5,
+    "broken_value": 300,
+    "unit": "seconds",
+    "description": "aicoe-lab-error-function has a 300 second timeout while the API Gateway integration in front of it gives up after 10 seconds. A hung invocation keeps billing for up to 290 seconds after the client response was abandoned, and holds concurrency in an account whose total limit is 10.",
+    "detection": {
+        "primary": "lambda:GetFunctionConfiguration -> Timeout (300)",
+        "secondary": "apigatewayv2:GetIntegration for api 1t6mt8jl5k -> TimeoutInMillis (10000)",
+        "signal": "function Timeout greater than the caller's timeout"
+    },
+    "remediation": {
+        "api": "lambda:UpdateFunctionConfiguration",
+        "parameters": {
+            "FunctionName": "aicoe-lab-error-function",
+            "Timeout": 5
+        },
+        "verification": "Timeout == 5, below the 10s integration timeout"
+    },
+    "reset": {
+        "api": "lambda:UpdateFunctionConfiguration",
+        "parameters": {
+            "FunctionName": "aicoe-lab-error-function",
+            "Timeout": 300
+        },
+        "verification": "Timeout == 300"
+    }
+}

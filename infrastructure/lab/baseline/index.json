@@ -1,0 +1,39 @@
+{
+    "schema_version": 3,
+    "updated_at": "2026-09-30T05:30:25+00:00",
+    "region": "us-east-1",
+    "authoritative_baseline": "/aicoe-lab/baseline/lab",
+    "issues_path": "/aicoe-lab/baseline/issues/",
+    "issues": [
+        {
+            "issue_id": "aicoe-lab-issue-001",
+            "parameter": "/aicoe-lab/baseline/issues/aicoe-lab-issue-001",
+            "category": "cost-efficiency",
+            "severity": "medium"
+        },
+        {
+            "issue_id": "aicoe-lab-issue-002",
+            "parameter": "/aicoe-lab/baseline/issues/aicoe-lab-issue-002",
+            "category": "cost-efficiency",
+            "severity": "low"
+        },
+        {
+            "issue_id": "aicoe-lab-issue-003",
+            "parameter": "/aicoe-lab/baseline/issues/aicoe-lab-issue-003",
+            "category": "reliability",
+            "severity": "high"
+        },
+        {
+            "issue_id": "aicoe-lab-issue-004",
+            "parameter": "/aicoe-lab/baseline/issues/aicoe-lab-issue-004",
+            "category": "reliability",
+            "severity": "high"
+        },
+        {
+            "issue_id": "aicoe-lab-issue-005",
+            "parameter": "/aicoe-lab/baseline/issues/aicoe-lab-issue-005",
+            "category": "architecture-configuration",
+            "severity": "medium"
+        }
+    ]
+}

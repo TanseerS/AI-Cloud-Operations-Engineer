@@ -1,0 +1,39 @@
+{
+    "issue_id": "aicoe-lab-issue-004",
+    "status": "active",
+    "category": "reliability",
+    "severity": "high",
+    "title": "API endpoint returns 500 on every request",
+    "target": {
+        "type": "aws_apigatewayv2_api",
+        "api_id": "1t6mt8jl5k",
+        "route": "GET /status",
+        "endpoint": "https://1t6mt8jl5k.execute-api.us-east-1.amazonaws.com/status"
+    },
+    "intended_value": {
+        "http_status": 200
+    },
+    "broken_value": {
+        "http_status": 500,
+        "body": {
+            "message": "Internal Server Error"
+        }
+    },
+    "description": "GET /status proxies to aicoe-lab-error-function. Because that function raises (see issue 003), the HTTP API returns 500 Internal Server Error on 100% of requests. Verified live; an unrouted path on the same API still returns 404, so the failure is the integration, not routing.",
+    "detection": {
+        "primary": "HTTP GET the endpoint -> 500 with body {\"message\":\"Internal Server Error\"}",
+        "metric": "AWS/ApiGateway 5xx count equals request count for ApiId 1t6mt8jl5k",
+        "correlation": "API 5xx lines up with Errors on aicoe-lab-error-function and its CloudWatch log entries",
+        "signal": "elevated 5xx error rate traced to a failing integration target"
+    },
+    "remediation": {
+        "depends_on": "aicoe-lab-issue-003",
+        "description": "Fixing the error function's configuration makes the route return 200.",
+        "verification": "GET /status returns 200"
+    },
+    "reset": {
+        "depends_on": "aicoe-lab-issue-003",
+        "description": "Resetting issue 003 restores the 502.",
+        "verification": "GET /status returns 500"
+    }
+}

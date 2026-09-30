@@ -1,0 +1,37 @@
+{
+    "issue_id": "aicoe-lab-issue-001",
+    "status": "active",
+    "category": "cost-efficiency",
+    "severity": "medium",
+    "title": "Lambda memory over-provisioned 23.5x",
+    "target": {
+        "type": "aws_lambda_function",
+        "name": "aicoe-lab-function",
+        "attribute": "MemorySize"
+    },
+    "intended_value": 128,
+    "broken_value": 3008,
+    "unit": "MB",
+    "description": "aicoe-lab-function runs a constant-time handler using ~36 MB but is configured with 3008 MB, so every billed millisecond costs ~23.5x what it needs to.",
+    "detection": {
+        "primary": "lambda:GetFunctionConfiguration -> MemorySize",
+        "secondary": "CloudWatch Logs REPORT line: compare 'Max Memory Used' with 'Memory Size'",
+        "signal": "memory utilisation far below 50%"
+    },
+    "remediation": {
+        "api": "lambda:UpdateFunctionConfiguration",
+        "parameters": {
+            "FunctionName": "aicoe-lab-function",
+            "MemorySize": 128
+        },
+        "verification": "MemorySize == 128 and the function still returns the expected response"
+    },
+    "reset": {
+        "api": "lambda:UpdateFunctionConfiguration",
+        "parameters": {
+            "FunctionName": "aicoe-lab-function",
+            "MemorySize": 3008
+        },
+        "verification": "MemorySize == 3008"
+    }
+}

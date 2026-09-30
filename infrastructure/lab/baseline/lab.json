@@ -1,0 +1,120 @@
+{
+    "schema_version": 3,
+    "recorded_at": "2026-09-30T05:30:25+00:00",
+    "lab": {
+        "name": "aicoe-lab",
+        "project": "ai-cloud-operations-engineer",
+        "region": "us-east-1",
+        "account_id": "303670280486",
+        "naming_prefix": "aicoe-lab",
+        "issue_count": 5
+    },
+    "layout": {
+        "issues_path": "/aicoe-lab/baseline/issues/",
+        "index": "/aicoe-lab/baseline/index",
+        "note": "one SSM parameter per issue; all Standard tier (no Advanced tier cost)"
+    },
+    "resources": [
+        {
+            "type": "aws_lambda_function",
+            "name": "aicoe-lab-function",
+            "log_group": "/aws/lambda/aicoe-lab-function",
+            "role": "aicoe-lab-function-role",
+            "runtime": "python3.13",
+            "arch": "arm64",
+            "current": {
+                "memory_mb": 3008,
+                "timeout_s": 5
+            },
+            "intended": {
+                "memory_mb": 128,
+                "timeout_s": 5
+            },
+            "expected_response": {
+                "status": "ok",
+                "service": "aicoe-lab"
+            }
+        },
+        {
+            "type": "aws_lambda_function",
+            "name": "aicoe-lab-error-function",
+            "log_group": "/aws/lambda/aicoe-lab-error-function",
+            "role": "aicoe-lab-error-function-role",
+            "runtime": "python3.13",
+            "arch": "arm64",
+            "current": {
+                "memory_mb": 128,
+                "timeout_s": 300,
+                "env": {}
+            },
+            "intended": {
+                "memory_mb": 128,
+                "timeout_s": 5
+            }
+        },
+        {
+            "type": "aws_cloudwatch_log_group",
+            "name": "/aws/lambda/aicoe-lab-function",
+            "current": {
+                "retention_days": 3653
+            },
+            "intended": {
+                "retention_days": 14
+            }
+        },
+        {
+            "type": "aws_cloudwatch_log_group",
+            "name": "/aws/lambda/aicoe-lab-error-function",
+            "current": {
+                "retention_days": 14
+            },
+            "intended": {
+                "retention_days": 14
+            }
+        },
+        {
+            "type": "aws_apigatewayv2_api",
+            "name": "aicoe-lab-api",
+            "api_id": "1t6mt8jl5k",
+            "stage": "$default",
+            "route": "GET /status",
+            "endpoint": "https://1t6mt8jl5k.execute-api.us-east-1.amazonaws.com/status",
+            "integration_target": "aicoe-lab-error-function",
+            "integration_timeout_ms": 10000,
+            "throttle": {
+                "rate": 5,
+                "burst": 5,
+                "note": "cost guardrail, not an issue"
+            }
+        },
+        {
+            "type": "aws_iam_role",
+            "name": "aicoe-lab-function-role"
+        },
+        {
+            "type": "aws_iam_role",
+            "name": "aicoe-lab-error-function-role"
+        }
+    ],
+    "cost_guardrails": {
+        "excluded": [
+            "nat_gateway",
+            "rds",
+            "ec2",
+            "eks",
+            "ecs",
+            "load_generator",
+            "scheduled_workloads"
+        ],
+        "api_throttle_rate_limit": 5,
+        "account_lambda_concurrency_limit": 10,
+        "note": "reserved concurrency unusable as an issue: account total concurrency is 10 and AWS requires 10 unreserved"
+    },
+    "tags": {
+        "Project": "ai-cloud-operations-engineer",
+        "Environment": "lab",
+        "ManagedBy": "aicoe",
+        "Purpose": "hackathon"
+    },
+    "notes": "Reset mechanism intentionally not implemented yet; these parameters are its source of truth."
+}
