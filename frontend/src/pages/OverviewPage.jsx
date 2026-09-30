@@ -6,21 +6,26 @@ import Badge from '../components/ui/Badge.jsx';
 import Button from '../components/ui/Button.jsx';
 import Icon from '../components/ui/Icon.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
+import ResetLabCard from '../components/lab/ResetLabCard.jsx';
 import useApiResource from '../hooks/useApiResource.js';
+import { useRefresh } from '../context/RefreshContext.jsx';
 import { useHealth } from '../context/HealthContext.jsx';
 import { api } from '../lib/api.js';
 import config from '../lib/config.js';
 
 /** What each API capability will do, so the grid explains the product, not just the routes. */
 const CAPABILITY_COPY = {
-  health: { icon: 'activity', title: 'Health', body: 'Liveness of the API itself. The only capability wired up today.' },
+  health: { icon: 'activity', title: 'API liveness', body: 'Confirms the API process is up. Makes no AWS call, so it answers even when the account does not.' },
+  healthAnalysis: { icon: 'issues', title: 'Health & issue detection', body: 'CloudWatch metrics and logs turned into observed facts, then deterministic findings.' },
   infrastructure: { icon: 'server', title: 'Resource discovery', body: 'Enumerates the tagged AWS lab resources into a single live inventory.' },
   architecture: { icon: 'architecture', title: 'Architecture analysis', body: 'Builds the node and edge graph rendered as an interactive diagram.' },
-  cost: { icon: 'cost', title: 'Cost analysis', body: 'Estimates spend and waste, and quantifies what each fix would save.' },
-  cloudwatch: { icon: 'logs', title: 'CloudWatch analysis', body: 'Pulls the metric and log evidence that proves a finding is real.' },
-  bedrock: { icon: 'activity', title: 'Bedrock analysis', body: 'Reasons over the collected findings and ranks the recommendations.' },
-  remediation: { icon: 'remediation', title: 'Remediation', body: 'Applies an approved fix and verifies the resource reached the intended state.' },
-  lab: { icon: 'reset', title: 'Lab reset', body: 'Replays the recorded reset steps to restore the seeded broken state.' },
+  costs: { icon: 'cost', title: 'Cost analysis', body: 'Cost Explorer spend, split into usage cost and what is actually billed after credits.' },
+  aiStatus: { icon: 'sparkle', title: 'AI model status', body: 'Which Bedrock model is active and in which region. Costs nothing to display.' },
+  aiAnalyze: { icon: 'sparkle', title: 'Bedrock analysis', body: 'Reasons over the collected observations. Runs only when explicitly requested.' },
+  remediationPlan: { icon: 'remediation', title: 'Remediation planning', body: 'Turns findings into single, reversible AWS changes from an allowlisted action registry.' },
+  remediationPlans: { icon: 'remediation', title: 'Remediation plans', body: 'Plans with their approval, execution and verification state.' },
+  labStatus: { icon: 'reset', title: 'Lab baseline', body: 'What the recorded baseline manages, and how the last reset went.' },
+  labReset: { icon: 'reset', title: 'Lab reset', body: 'Restores the intentionally broken baseline, writing back only what differs.' },
 };
 
 function DetailRow({ label, children }) {
@@ -39,8 +44,9 @@ function connectionTone(status) {
 }
 
 export function OverviewPage() {
+  const { refreshToken } = useRefresh();
   const health = useHealth();
-  const index = useApiResource(api.index);
+  const index = useApiResource(api.index, { refreshToken });
 
   const connection = connectionTone(health.status);
   const isBusy = health.status === 'loading' || health.status === 'refreshing';
@@ -150,6 +156,10 @@ export function OverviewPage() {
             </CardBody>
           </Card>
         </div>
+      </section>
+
+      <section className="section">
+        <ResetLabCard />
       </section>
 
       <section className="section">

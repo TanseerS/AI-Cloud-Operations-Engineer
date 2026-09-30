@@ -12,6 +12,7 @@ import StatusIndicator from '../components/ui/StatusIndicator.jsx';
 import { SkeletonCard } from '../components/ui/Skeleton.jsx';
 import PlanCard, { RecommendationOnlyCard } from '../components/remediation/PlanCard.jsx';
 import useApiResource from '../hooks/useApiResource.js';
+import { useRefresh } from '../context/RefreshContext.jsx';
 import { api } from '../lib/api.js';
 import { formatRelative } from '../lib/format.js';
 
@@ -20,7 +21,8 @@ import { formatRelative } from '../lib/format.js';
  * to "ready for execution" and stops there, which is also what the backend enforces.
  */
 export function RemediationPage() {
-  const stored = useApiResource(api.remediationPlans);
+  const { refreshToken } = useRefresh();
+  const stored = useApiResource(api.remediationPlans, { refreshToken });
   const [planning, setPlanning] = useState(false);
   const [approvingId, setApprovingId] = useState(null);
   const [executingId, setExecutingId] = useState(null);

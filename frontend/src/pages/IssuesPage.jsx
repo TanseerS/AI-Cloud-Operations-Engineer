@@ -13,11 +13,13 @@ import HealthScore from '../components/health/HealthScore.jsx';
 import SeveritySummary from '../components/health/SeveritySummary.jsx';
 import IssueCard from '../components/health/IssueCard.jsx';
 import useApiResource from '../hooks/useApiResource.js';
+import { useRefresh } from '../context/RefreshContext.jsx';
 import { api } from '../lib/api.js';
 import { formatRelative } from '../lib/format.js';
 
 export function IssuesPage() {
-  const health = useApiResource(api.healthAnalysis);
+  const { refreshToken } = useRefresh();
+  const health = useApiResource(api.healthAnalysis, { refreshToken });
   const { data, status, error, reload } = health;
   const [severityFilter, setSeverityFilter] = useState(null);
 

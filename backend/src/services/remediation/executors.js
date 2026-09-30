@@ -72,6 +72,8 @@ export async function captureLambdaState(functionName) {
     LastModified: configuration.LastModified ?? null,
     LoggingConfig: configuration.LoggingConfig ?? null,
     RevisionId: configuration.RevisionId ?? null,
+    // Names only, never values - a diff needs to know which keys are set, not what they hold.
+    environmentVariableNames: Object.keys(configuration.Environment?.Variables ?? {}).sort(),
   };
 }
 
@@ -147,6 +149,33 @@ export async function applyLambdaTimeoutFix({ FunctionName, Timeout }) {
 }
 
 /**
+ * lambda:update-environment - replaces the function's environment variable set.
+ *
+ * Used only to restore the baseline's recorded environment. Values are written, never
+ * read back into an audit record, so nothing placed here can leak through the API.
+ */
+export async function applyLambdaEnvironmentFix({ FunctionName, Environment }) {
+  const variables = Environment?.Variables;
+  if (typeof FunctionName !== 'string' || typeof variables !== 'object' || variables === null) {
+    throw new Error('applyLambdaEnvironmentFix requires FunctionName and Environment.Variables');
+  }
+
+  const response = await getLambdaClient().send(
+    new UpdateFunctionConfigurationCommand({ FunctionName, Environment: { Variables: variables } }),
+  );
+  const settled = await waitForLambdaUpdate(FunctionName);
+
+  return {
+    awsOperation: 'lambda:UpdateFunctionConfiguration',
+    // Names only. The values are deliberately not echoed.
+    requested: { FunctionName, environmentVariableNames: Object.keys(variables) },
+    acceptedRevisionId: response.RevisionId ?? null,
+    settled: settled.settled,
+    lastUpdateStatus: settled.lastUpdateStatus,
+  };
+}
+
+/**
  * logs:update-retention - sets a retention policy, or removes one when restoring a group
  * that previously had none.
  */
@@ -185,6 +214,7 @@ const EXECUTORS = Object.freeze({
   [ACTION_TYPES.LAMBDA_UPDATE_MEMORY]: applyLambdaMemoryFix,
   [ACTION_TYPES.LAMBDA_UPDATE_TIMEOUT]: applyLambdaTimeoutFix,
   [ACTION_TYPES.LOGS_UPDATE_RETENTION]: applyLogRetentionFix,
+  [ACTION_TYPES.LAMBDA_UPDATE_ENVIRONMENT]: applyLambdaEnvironmentFix,
 });
 
 export function executorFor(actionType) {

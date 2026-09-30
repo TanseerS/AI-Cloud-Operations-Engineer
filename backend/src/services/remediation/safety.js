@@ -66,6 +66,20 @@ function checkParameters(actionType, parameters) {
       if (typeof parameters.FunctionName !== 'string') problems.push('FunctionName must be a string');
       break;
     }
+    case ACTION_TYPES.LAMBDA_UPDATE_ENVIRONMENT: {
+      if (typeof parameters.FunctionName !== 'string') problems.push('FunctionName must be a string');
+      const variables = parameters.Environment?.Variables;
+      if (variables === undefined || variables === null || typeof variables !== 'object' || Array.isArray(variables)) {
+        problems.push('Environment.Variables must be an object');
+      } else {
+        for (const [key, value] of Object.entries(variables)) {
+          if (typeof key !== 'string' || typeof value !== 'string') {
+            problems.push(`Environment.Variables.${key} must be a string`);
+          }
+        }
+      }
+      break;
+    }
     case ACTION_TYPES.LOGS_UPDATE_RETENTION: {
       const value = parameters.retentionInDays;
       if (!ALLOWED_RETENTION_DAYS.includes(value)) {

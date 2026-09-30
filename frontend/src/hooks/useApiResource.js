@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * Loads one API resource and exposes the four states a dashboard actually needs:
  * loading, data, error, and how long the call took.
  */
-export function useApiResource(loader) {
+export function useApiResource(loader, { refreshToken = 0 } = {}) {
   const [state, setState] = useState({
     status: 'loading',
     data: null,
@@ -38,9 +38,11 @@ export function useApiResource(loader) {
     }
   }, []);
 
+  // refreshToken is intentionally a dependency: a lab reset bumps it to pull fresh AWS
+  // state into every page that is mounted.
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshToken]);
 
   return { ...state, reload: load };
 }

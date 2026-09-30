@@ -43,6 +43,9 @@ export const ACTION_TYPES = {
   LAMBDA_UPDATE_MEMORY: 'lambda:update-memory',
   LAMBDA_UPDATE_TIMEOUT: 'lambda:update-timeout',
   LOGS_UPDATE_RETENTION: 'logs:update-retention',
+  // Used by lab reset to restore the recorded baseline environment, which for this lab
+  // is the empty set. No remediation rule maps to it, so it never proposes a fix.
+  LAMBDA_UPDATE_ENVIRONMENT: 'lambda:update-environment',
 };
 
 export const REMEDIATION_REGISTRY = {

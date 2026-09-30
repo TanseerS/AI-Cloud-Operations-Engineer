@@ -11,6 +11,7 @@ import { SkeletonCard } from '../components/ui/Skeleton.jsx';
 import ServiceSection from '../components/infrastructure/ServiceSection.jsx';
 import { presentationFor } from '../components/infrastructure/presentation.js';
 import useApiResource from '../hooks/useApiResource.js';
+import { useRefresh } from '../context/RefreshContext.jsx';
 import { api } from '../lib/api.js';
 import { formatDuration, formatRelative } from '../lib/format.js';
 
@@ -30,7 +31,8 @@ function LoadingState() {
 }
 
 export function InfrastructurePage() {
-  const inventory = useApiResource(api.infrastructure);
+  const { refreshToken } = useRefresh();
+  const inventory = useApiResource(api.infrastructure, { refreshToken });
   const { data, status, error, reload } = inventory;
 
   const isBusy = status === 'loading' || status === 'refreshing';

@@ -12,6 +12,7 @@ import ServiceBreakdown from '../components/cost/ServiceBreakdown.jsx';
 import TopDrivers from '../components/cost/TopDrivers.jsx';
 import BillingStatus from '../components/cost/BillingStatus.jsx';
 import useApiResource from '../hooks/useApiResource.js';
+import { useRefresh } from '../context/RefreshContext.jsx';
 import { api } from '../lib/api.js';
 import { formatCurrency, formatPercent } from '../lib/currency.js';
 import { formatRelative } from '../lib/format.js';
@@ -74,7 +75,8 @@ function HeadlineCost({ data }) {
 }
 
 export function CostPage() {
-  const cost = useApiResource(api.costs);
+  const { refreshToken } = useRefresh();
+  const cost = useApiResource(api.costs, { refreshToken });
   const { data, status, error, reload } = cost;
   const isBusy = status === 'loading' || status === 'refreshing';
 

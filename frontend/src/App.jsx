@@ -4,6 +4,7 @@ import { Route, Routes } from 'react-router-dom';
 import AppShell from './components/layout/AppShell.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { HealthProvider, useHealth } from './context/HealthContext.jsx';
+import { RefreshProvider } from './context/RefreshContext.jsx';
 
 import OverviewPage from './pages/OverviewPage.jsx';
 import InfrastructurePage from './pages/InfrastructurePage.jsx';
@@ -47,9 +48,11 @@ function Workspace() {
 
 export function App() {
   return (
-    <HealthProvider>
-      <Workspace />
-    </HealthProvider>
+    <RefreshProvider>
+      <HealthProvider>
+        <Workspace />
+      </HealthProvider>
+    </RefreshProvider>
   );
 }
 

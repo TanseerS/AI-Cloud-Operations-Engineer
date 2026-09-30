@@ -12,14 +12,16 @@ import StatusIndicator from '../components/ui/StatusIndicator.jsx';
 import { SkeletonCard } from '../components/ui/Skeleton.jsx';
 import ArchitectureGraph from '../components/architecture/ArchitectureGraph.jsx';
 import useApiResource from '../hooks/useApiResource.js';
+import { useRefresh } from '../context/RefreshContext.jsx';
 import { api } from '../lib/api.js';
 import { formatDuration, formatRelative } from '../lib/format.js';
 
 export function ArchitecturePage() {
-  const architecture = useApiResource(api.architecture);
+  const { refreshToken } = useRefresh();
+  const architecture = useApiResource(api.architecture, { refreshToken });
   // Findings are loaded alongside the topology so a node can carry its own health.
   // A failure here degrades the overlay only - the graph still renders.
-  const health = useApiResource(api.healthAnalysis);
+  const health = useApiResource(api.healthAnalysis, { refreshToken });
   const [searchParams] = useSearchParams();
   const focusId = searchParams.get('focus');
   const { data, status, error, reload } = architecture;

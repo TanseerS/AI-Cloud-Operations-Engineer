@@ -16,8 +16,8 @@ reliability problems, and proposes or applies fixes.
 | Bedrock AI analysis | Done |
 | Remediation planning & approval | Done |
 | Remediation execution & verification | Done |
+| Idempotent lab reset | Done |
 | Reset mechanism | Not started |
-| Lab reset mechanism | Not started |
 | Detection / remediation agent | Not started |
 
 The application discovers the real AWS lab inventory end to end. The remaining analysis
@@ -38,7 +38,8 @@ backend/                 Node + Express API - the only tier that will hold AWS a
       cloudwatch/        Bounded metric and log collection, log redaction
       health/            Fact model and the deterministic detection rules
       ai/                Bedrock client, analysis schema, context builder, prompt
-      remediation/       Action allowlist, safety gate, plan storage
+      remediation/       Action allowlist, safety gate, plan storage, executors
+      lab/               Baseline reader and restore-target mapping
     middleware/          Request logging, 404, error to response
     lib/                 Typed errors and small helpers
 frontend/                React + Vite dashboard - never holds AWS credentials
@@ -51,6 +52,7 @@ frontend/                React + Vite dashboard - never holds AWS credentials
     components/health/          Health score, severity tiles, issue cards, evidence
     components/ai/              Model status, AI findings, recommendation groups
     components/remediation/     Plan cards, current-to-proposed diff
+    components/lab/             Lab reset control
     context/             App-wide API health, polled once
     hooks/               Theme and API-resource hooks
     lib/                 Config and the single API client
@@ -99,6 +101,8 @@ Base path `/api/v1`. Only health is implemented.
 | POST | `/api/v1/remediation/plan` | Available - builds plans (no execution) |
 | POST | `/api/v1/remediation/plans/:id/approve` | Available - state change only |
 | POST | `/api/v1/remediation/plans/:id/execute` | Available - applies and verifies |
+| GET | `/api/v1/lab/status` | Available - baseline summary |
+| POST | `/api/v1/lab/reset` | Available - restores the broken baseline |
 | POST | `/api/v1/lab/reset` | 501 |
 
 ```console
@@ -173,6 +177,13 @@ Every mutating AWS command in the codebase lives in one file, in three named fun
 there is no generic command dispatcher. Verification reads the resource back from AWS and
 re-runs the detector; a successful API response is never treated as success on its own.
 See [docs/remediation-execution.md](docs/remediation-execution.md).
+
+## Lab reset
+
+`POST /api/v1/lab/reset` restores the intentionally broken baseline. It compares each
+managed setting against the baseline recorded at lab setup and writes back only what
+differs, so resetting an already-broken lab makes no AWS calls at all. No cooldown —
+concurrency is handled server-side. See [docs/lab-reset.md](docs/lab-reset.md).
 
 ## The lab
 

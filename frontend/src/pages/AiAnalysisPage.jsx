@@ -12,6 +12,7 @@ import ModelStatus from '../components/ai/ModelStatus.jsx';
 import FindingCard from '../components/ai/FindingCard.jsx';
 import RecommendationGroup from '../components/ai/RecommendationGroup.jsx';
 import useApiResource from '../hooks/useApiResource.js';
+import { useRefresh } from '../context/RefreshContext.jsx';
 import { api } from '../lib/api.js';
 import { formatDuration, formatRelative } from '../lib/format.js';
 
@@ -23,8 +24,9 @@ import { formatDuration, formatRelative } from '../lib/format.js';
  * held-down button cannot meter the account.
  */
 export function AiAnalysisPage() {
+  const { refreshToken } = useRefresh();
   const status = useApiResource(api.aiStatus);
-  const health = useApiResource(api.healthAnalysis);
+  const health = useApiResource(api.healthAnalysis, { refreshToken });
 
   const [state, setState] = useState({ phase: 'idle', data: null, error: null, ranMs: null });
 
