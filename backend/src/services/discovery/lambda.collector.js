@@ -88,6 +88,9 @@ export async function collect(index) {
           lastModified: configuration.LastModified ?? null,
           roleArn: configuration.Role ?? null,
           logGroup: configuration.LoggingConfig?.LogGroup ?? `/aws/lambda/${fn.FunctionName}`,
+          // 'configuration' when the function names its log group explicitly, 'default'
+          // when AWS's documented naming rule is what determines it.
+          logGroupSource: configuration.LoggingConfig?.LogGroup ? 'configuration' : 'default',
           // Names only. Environment variable values can hold secrets and are never returned.
           environmentVariableNames: Object.keys(configuration.Environment?.Variables ?? {}),
         },

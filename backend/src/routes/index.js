@@ -22,7 +22,7 @@ router.get('/', (_req, res) => {
     endpoints: {
       health: { path: '/api/v1/health', status: 'available' },
       infrastructure: { path: '/api/v1/infrastructure/resources', status: 'available' },
-      architecture: { path: '/api/v1/architecture', status: 'planned' },
+      architecture: { path: '/api/v1/architecture/graph', status: 'available' },
       cost: { path: '/api/v1/cost', status: 'planned' },
       cloudwatch: { path: '/api/v1/cloudwatch', status: 'planned' },
       bedrock: { path: '/api/v1/bedrock/analysis', status: 'planned' },

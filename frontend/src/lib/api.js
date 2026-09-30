@@ -55,6 +55,7 @@ export const api = {
   // Discovery fans out across several AWS services, so it needs more headroom than a
   // health check.
   infrastructure: () => request('/infrastructure/resources', { timeoutMs: 30000 }),
+  architecture: () => request('/architecture/graph', { timeoutMs: 30000 }),
 };
 
 export default api;

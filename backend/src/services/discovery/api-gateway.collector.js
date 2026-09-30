@@ -13,11 +13,12 @@ export const service = 'apigateway';
 export const label = 'API Gateway';
 export const resourceType = 'AWS::ApiGatewayV2::Api';
 
-/** An integration URI is a Lambda ARN; the function name is the useful half. */
+/** An integration URI embeds the target Lambda ARN; both halves are worth keeping. */
 function integrationTarget(uri) {
-  if (typeof uri !== 'string') return null;
-  const match = uri.match(/function:([^/:]+)/);
-  return match ? match[1] : uri;
+  if (typeof uri !== 'string') return { name: null, arn: null };
+  const arnMatch = uri.match(/(arn:aws[a-z-]*:lambda:[^/]+)/);
+  const nameMatch = uri.match(/function:([^/:]+)/);
+  return { name: nameMatch ? nameMatch[1] : uri, arn: arnMatch ? arnMatch[1] : null };
 }
 
 export async function collect(index) {
@@ -57,7 +58,8 @@ export async function collect(index) {
       const integrationList = (integrations?.Items ?? []).map((item) => ({
         integrationId: item.IntegrationId,
         type: item.IntegrationType,
-        target: integrationTarget(item.IntegrationUri),
+        target: integrationTarget(item.IntegrationUri).name,
+        targetArn: integrationTarget(item.IntegrationUri).arn,
         timeoutMs: item.TimeoutInMillis ?? null,
         payloadFormatVersion: item.PayloadFormatVersion ?? null,
       }));

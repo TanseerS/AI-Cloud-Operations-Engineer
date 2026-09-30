@@ -10,8 +10,9 @@ reliability problems, and proposes or applies fixes.
 | Lab environment (5 seeded issues) | Done |
 | Application foundation (frontend + API) | Done |
 | AWS resource discovery | Done |
+| Interactive architecture map | Done |
 | Reset mechanism | Not started |
-| Architecture / cost / CloudWatch / Bedrock analysis | Not started |
+| Cost / CloudWatch / Bedrock analysis | Not started |
 | Detection / remediation agent | Not started |
 
 The application discovers the real AWS lab inventory end to end. The remaining analysis
@@ -27,6 +28,7 @@ backend/                 Node + Express API - the only tier that will hold AWS a
     services/            Capability logic, kept out of route handlers
       aws/               SDK client factory and the reusable lab-resource filter
       discovery/         One collector per AWS service, registered in index.js
+      architecture/      Relationship rules and the graph builder
     middleware/          Request logging, 404, error to response
     lib/                 Typed errors and small helpers
 frontend/                React + Vite dashboard - never holds AWS credentials
@@ -34,6 +36,7 @@ frontend/                React + Vite dashboard - never holds AWS credentials
     components/layout/   App shell, sidebar, top bar, page header
     components/ui/       Card, Badge, Button, StatTile, StatusIndicator, EmptyState, Icon
     components/infrastructure/  Service sections and expandable resource cards
+    components/architecture/    Graph canvas, nodes, layout and detail panel
     context/             App-wide API health, polled once
     hooks/               Theme and API-resource hooks
     lib/                 Config and the single API client
@@ -74,7 +77,7 @@ Base path `/api/v1`. Only health is implemented.
 | GET | `/api/v1/health` | Available |
 | GET | `/api/v1` | Available - lists the capability surface |
 | GET | `/api/v1/infrastructure/resources` | Available - live AWS inventory |
-| GET | `/api/v1/architecture` | 501 |
+| GET | `/api/v1/architecture/graph` | Available - topology derived from discovery |
 | GET | `/api/v1/cost` | 501 |
 | GET | `/api/v1/cloudwatch` | 501 |
 | GET | `/api/v1/bedrock/analysis` | 501 |
@@ -109,6 +112,13 @@ driven entirely by CSS custom properties.
 Lambda, CloudWatch Logs, API Gateway, SSM Parameter Store and IAM. See
 [docs/discovery.md](docs/discovery.md) for the response shape, the lab filter and the
 partial-failure contract.
+
+## Architecture map
+
+`GET /api/v1/architecture/graph` turns the inventory into nodes and edges. Every edge is
+derived from a field in a resource's own AWS configuration and is only drawn when the
+target was itself discovered, so the diagram never points at something unverified. See
+[docs/architecture-graph.md](docs/architecture-graph.md).
 
 ## The lab
 
