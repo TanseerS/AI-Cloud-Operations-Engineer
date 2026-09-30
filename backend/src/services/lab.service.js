@@ -433,9 +433,11 @@ export async function getLabStatus() {
   const intervalMs = config.automation.intervalHours * 3600 * 1000;
 
   let issueCount = null;
+  let issueCounts = null;
   try {
     const health = await getHealthAnalysis();
     issueCount = health.summary?.totalIssues ?? null;
+    issueCounts = health.summary?.countsBySeverity ?? null;
   } catch {
     issueCount = null;
   }
@@ -446,6 +448,7 @@ export async function getLabStatus() {
     matchesBaseline: labState === 'broken',
     managedResourceCount: restorable.length,
     issueCount,
+    issueCounts,
     stateDetail: {
       atBaseline: alreadyAtBaseline.length,
       offBaseline: required.length,

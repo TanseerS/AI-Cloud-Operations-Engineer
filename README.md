@@ -18,6 +18,7 @@ reliability problems, and proposes or applies fixes.
 | Remediation execution & verification | Done |
 | Idempotent lab reset | Done |
 | Autonomous scheduled lab management | Done |
+| Unified operations dashboard | Done |
 | Reset mechanism | Not started |
 | Detection / remediation agent | Not started |
 
@@ -93,6 +94,7 @@ Base path `/api/v1`. Only health is implemented.
 
 | Method | Path | Status |
 |---|---|---|
+| GET | `/api/v1/overview` | Available - one composed snapshot for the dashboard |
 | GET | `/api/v1/health` | Available |
 | GET | `/api/v1` | Available - lists the capability surface |
 | GET | `/api/v1/infrastructure/resources` | Available - live AWS inventory |

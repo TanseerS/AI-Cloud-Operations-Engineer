@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import healthRoute from './health.route.js';
+import overviewRoute from './overview.route.js';
 import infrastructureRoute from './infrastructure.route.js';
 import architectureRoute from './architecture.route.js';
 import costRoute from './cost.route.js';
@@ -19,6 +20,7 @@ router.get('/', (_req, res) => {
   res.json({
     service: 'aicoe-api',
     endpoints: {
+      overview: { path: '/api/v1/overview', status: 'available' },
       health: { path: '/api/v1/health', status: 'available' },
       healthAnalysis: { path: '/api/v1/health/analysis', status: 'available' },
       infrastructure: { path: '/api/v1/infrastructure/resources', status: 'available' },
@@ -34,6 +36,7 @@ router.get('/', (_req, res) => {
   });
 });
 
+router.use('/overview', overviewRoute);
 router.use('/health', healthRoute);
 router.use('/infrastructure', infrastructureRoute);
 router.use('/architecture', architectureRoute);

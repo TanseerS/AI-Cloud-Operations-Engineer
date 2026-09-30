@@ -1,8 +1,11 @@
+import { Link } from 'react-router-dom';
+
 import Badge from '../ui/Badge.jsx';
 import Button from '../ui/Button.jsx';
 import Icon from '../ui/Icon.jsx';
 import StatusIndicator from '../ui/StatusIndicator.jsx';
 import { presentationFor } from '../infrastructure/presentation.js';
+import { SEVERITY_TONE } from '../health/severity.js';
 import { EMPTY, formatValue, humanizeKey } from '../../lib/format.js';
 
 const STATUS_TONE = { healthy: 'success', warning: 'warning', failing: 'danger', unknown: 'neutral' };
@@ -44,7 +47,7 @@ function Row({ label, value }) {
  * The detail panel. Glass over the diagram on desktop, a sheet at the bottom on narrow
  * screens. Everything shown comes from the discovery payload for that node.
  */
-export function NodeDetailPanel({ node, connections, onClose }) {
+export function NodeDetailPanel({ node, connections, issues = [], onClose }) {
   if (!node) return null;
 
   const presentation = presentationFor(node.service);
@@ -101,6 +104,44 @@ export function NodeDetailPanel({ node, connections, onClose }) {
             </div>
           </section>
         )}
+
+        {issues.length > 0 ? (
+          <section className="detail-panel__section">
+            <h4 className="detail-panel__section-title">
+              {issues.length} finding{issues.length === 1 ? '' : 's'} on this resource
+            </h4>
+            <ul className="panel-issues">
+              {issues.map((issue) => (
+                <li key={issue.id} className="panel-issue">
+                  <Badge tone={SEVERITY_TONE[issue.severity] ?? 'neutral'}>{issue.severity}</Badge>
+                  <span className="panel-issue__title">{issue.title}</span>
+                  {issue.metrics ? (
+                    <span className="panel-issue__metrics tabular">
+                      {Object.entries(issue.metrics)
+                        .slice(0, 2)
+                        .map(([key, value]) => `${key}: ${value}`)
+                        .join(' · ')}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+            <div className="panel-issue__actions">
+              <Link className="button button--ghost" to="/issues">
+                <Icon name="issues" size={13} />
+                Evidence
+              </Link>
+              <Link className="button button--ghost" to="/ai">
+                <Icon name="sparkle" size={13} />
+                AI analysis
+              </Link>
+              <Link className="button button--ghost" to="/remediation">
+                <Icon name="remediation" size={13} />
+                Remediation
+              </Link>
+            </div>
+          </section>
+        ) : null}
 
         {connections.length > 0 ? (
           <section className="detail-panel__section">

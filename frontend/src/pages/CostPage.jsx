@@ -212,7 +212,8 @@ export function CostPage() {
                   <Card>
                     <CardHeader
                       title="Cost by service"
-                      description={`${data.services.filter((entry) => entry.cost > 0).length} services with charges`}
+                      description={`${data.services.filter((entry) => entry.cost > 0).length} services with charges. A tagged service links to the resources billed under it — a name correspondence, not a claim about which one caused the charge.`}
+                      actions={<Badge tone="outline">AWS billing data</Badge>}
                     />
                     <CardBody>
                       <ServiceBreakdown services={data.services} currency={data.currency} />

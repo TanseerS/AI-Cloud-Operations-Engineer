@@ -33,7 +33,7 @@ function useLayoutDirection() {
   return direction;
 }
 
-export function ArchitectureGraph({ graph, serviceLabels, resourceHealth = [], focusId = null }) {
+export function ArchitectureGraph({ graph, serviceLabels, resourceHealth = [], issues = [], focusId = null }) {
   const direction = useLayoutDirection();
   const [selectedId, setSelectedId] = useState(focusId);
 
@@ -155,6 +155,7 @@ export function ArchitectureGraph({ graph, serviceLabels, resourceHealth = [], f
       <NodeDetailPanel
         node={selectedNode}
         connections={connections}
+        issues={issues.filter((issue) => issue.resourceId === selectedId)}
         onClose={() => setSelectedId(null)}
       />
     </div>

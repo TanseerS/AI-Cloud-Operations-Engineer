@@ -52,6 +52,8 @@ export async function request(path, { method = 'GET', signal, timeoutMs = 8000 }
 export const api = {
   health: () => request('/health'),
   index: () => request('/'),
+  // One composed snapshot for the landing page; the backend reuses its own caches.
+  overview: () => request('/overview', { timeoutMs: 60000 }),
   // Discovery fans out across several AWS services, so it needs more headroom than a
   // health check.
   infrastructure: () => request('/infrastructure/resources', { timeoutMs: 30000 }),

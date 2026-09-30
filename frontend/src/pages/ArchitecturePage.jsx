@@ -194,6 +194,7 @@ export function ArchitecturePage() {
                     graph={data}
                     serviceLabels={serviceLabels}
                     resourceHealth={health.data?.resourceHealth ?? []}
+                    issues={health.data?.issues ?? []}
                     focusId={focusId}
                   />
                 </Card>

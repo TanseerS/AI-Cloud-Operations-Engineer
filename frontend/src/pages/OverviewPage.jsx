@@ -1,208 +1,357 @@
+import { Link } from 'react-router-dom';
+
 import PageHeader from '../components/layout/PageHeader.jsx';
 import Card, { CardBody, CardHeader } from '../components/ui/Card.jsx';
-import StatTile from '../components/ui/StatTile.jsx';
-import StatusIndicator from '../components/ui/StatusIndicator.jsx';
-import Badge from '../components/ui/Badge.jsx';
 import Button from '../components/ui/Button.jsx';
 import Icon from '../components/ui/Icon.jsx';
+import Badge from '../components/ui/Badge.jsx';
+import Callout from '../components/ui/Callout.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
-import ResetLabCard from '../components/lab/ResetLabCard.jsx';
+import StatusIndicator from '../components/ui/StatusIndicator.jsx';
+import Freshness from '../components/ui/Freshness.jsx';
+import { SkeletonCard } from '../components/ui/Skeleton.jsx';
+import { SEVERITY_ORDER, SEVERITY_TONE } from '../components/health/severity.js';
 import useApiResource from '../hooks/useApiResource.js';
 import { useRefresh } from '../context/RefreshContext.jsx';
-import { useHealth } from '../context/HealthContext.jsx';
 import { api } from '../lib/api.js';
-import config from '../lib/config.js';
+import { formatCurrency, formatPercent } from '../lib/currency.js';
+import { EMPTY } from '../lib/format.js';
 
-/** What each API capability will do, so the grid explains the product, not just the routes. */
-const CAPABILITY_COPY = {
-  health: { icon: 'activity', title: 'API liveness', body: 'Confirms the API process is up. Makes no AWS call, so it answers even when the account does not.' },
-  healthAnalysis: { icon: 'issues', title: 'Health & issue detection', body: 'CloudWatch metrics and logs turned into observed facts, then deterministic findings.' },
-  infrastructure: { icon: 'server', title: 'Resource discovery', body: 'Enumerates the tagged AWS lab resources into a single live inventory.' },
-  architecture: { icon: 'architecture', title: 'Architecture analysis', body: 'Builds the node and edge graph rendered as an interactive diagram.' },
-  costs: { icon: 'cost', title: 'Cost analysis', body: 'Cost Explorer spend, split into usage cost and what is actually billed after credits.' },
-  aiStatus: { icon: 'sparkle', title: 'AI model status', body: 'Which Bedrock model is active and in which region. Costs nothing to display.' },
-  aiAnalyze: { icon: 'sparkle', title: 'Bedrock analysis', body: 'Reasons over the collected observations. Runs only when explicitly requested.' },
-  remediationPlan: { icon: 'remediation', title: 'Remediation planning', body: 'Turns findings into single, reversible AWS changes from an allowlisted action registry.' },
-  remediationPlans: { icon: 'remediation', title: 'Remediation plans', body: 'Plans with their approval, execution and verification state.' },
-  labStatus: { icon: 'reset', title: 'Lab baseline', body: 'What the recorded baseline manages, and how the last reset went.' },
-  labReset: { icon: 'reset', title: 'Lab reset', body: 'Restores the intentionally broken baseline, writing back only what differs.' },
+const LAB_STATE = {
+  broken: { tone: 'success', label: 'Intentionally broken' },
+  fixed: { tone: 'warning', label: 'Fixed' },
+  partial: { tone: 'warning', label: 'Partially fixed' },
+  unknown: { tone: 'neutral', label: 'Unknown' },
 };
 
-function DetailRow({ label, children }) {
-  return (
-    <div className="detail-row">
-      <span className="detail-row__key">{label}</span>
-      <span className="detail-row__value">{children}</span>
-    </div>
-  );
-}
+const HEALTH_TONE = { healthy: 'success', degraded: 'warning', unhealthy: 'warning', critical: 'danger' };
 
-function connectionTone(status) {
-  if (status === 'success') return { tone: 'success', label: 'Connected' };
-  if (status === 'error') return { tone: 'danger', label: 'Unreachable' };
-  return { tone: 'info', label: 'Checking' };
+/**
+ * A summary tile that links somewhere useful.
+ *
+ * Every number here is a door: a count of issues is only interesting if you can reach
+ * the issues. The whole tile is the link, so the target stays large.
+ */
+function SummaryTile({ to, label, icon, value, hint, tone, unavailable }) {
+  const body = (
+    <>
+      <span className="summary__label">
+        <Icon name={icon} size={13} />
+        {label}
+      </span>
+      <span className={`summary__value tabular${tone ? ` summary__value--${tone}` : ''}`}>
+        {unavailable ? EMPTY : value}
+      </span>
+      <span className="summary__hint">{unavailable ? 'Unavailable' : hint}</span>
+    </>
+  );
+
+  return to ? (
+    <Link className="card card--interactive summary summary--link" to={to}>
+      {body}
+      <Icon name="chevron" size={13} className="summary__chevron" />
+    </Link>
+  ) : (
+    <div className="card summary">{body}</div>
+  );
 }
 
 export function OverviewPage() {
   const { refreshToken } = useRefresh();
-  const health = useHealth();
-  const index = useApiResource(api.index, { refreshToken });
+  const overview = useApiResource(api.overview, { refreshToken });
+  const { data, status, error, reload } = overview;
 
-  const connection = connectionTone(health.status);
-  const isBusy = health.status === 'loading' || health.status === 'refreshing';
-
-  const endpoints = index.data?.endpoints ?? {};
-  const capabilities = Object.entries(endpoints);
-  const availableCount = capabilities.filter(([, value]) => value.status === 'available').length;
-
-  const refreshAll = () => {
-    health.reload();
-    index.reload();
-  };
+  const busy = status === 'loading' || status === 'refreshing';
+  const severity = data?.health?.countsBySeverity ?? {};
+  const criticalAndHigh = (severity.critical ?? 0) + (severity.high ?? 0);
+  const labState = LAB_STATE[data?.lab?.state] ?? LAB_STATE.unknown;
 
   return (
     <>
       <PageHeader
         title="Operations overview"
-        subtitle="Connection status and the capability surface of the AI Cloud Operations Engineer. Analysis modules light up here as each one is built."
+        subtitle="The state of the AWS lab environment: what exists, what it costs, what is wrong with it, and what is being done about it."
         aside={
           <>
-            <StatusIndicator tone={connection.tone} label={connection.label} pulse={isBusy} />
-            <Button onClick={refreshAll} disabled={isBusy}>
+            {data ? <Freshness at={data.generatedAt} /> : null}
+            <Button onClick={reload} disabled={busy}>
               <Icon name="refresh" size={14} />
-              Refresh
+              {busy ? 'Refreshing' : 'Refresh'}
             </Button>
           </>
         }
       />
 
-      <div className="stat-grid">
-        <StatTile
-          label="API status"
-          icon="plug"
-          value={health.status === 'success' ? 'Operational' : connection.label}
-          hint={health.checkedAt ? `Checked ${health.checkedAt.toLocaleTimeString()}` : 'Contacting the API'}
-        />
-        <StatTile
-          label="Round trip"
-          icon="activity"
-          value={health.latencyMs === null ? '—' : `${health.latencyMs} ms`}
-          hint="Browser to API, measured client side"
-        />
-        <StatTile
-          label="AWS region"
-          icon="cloud"
-          mono
-          value={health.data?.region ?? '—'}
-          hint="Reported by the API, never set in the browser"
-        />
-        <StatTile
-          label="Capabilities live"
-          icon="overview"
-          value={capabilities.length ? `${availableCount} / ${capabilities.length}` : '—'}
-          hint="Remaining modules answer 501 until built"
-        />
-      </div>
-
-      <section className="section">
-        <div className="two-column">
-          <Card>
-            <CardHeader title="Backend connection" description="The browser holds no AWS access. Every AWS call happens behind this API." />
-            <CardBody flush>
-              <div className="detail-list">
-                <DetailRow label="Endpoint">
-                  <span className="mono">{config.apiBaseUrl}</span>
-                </DetailRow>
-                <DetailRow label="Status">
-                  <StatusIndicator tone={connection.tone} label={connection.label} pulse={isBusy} />
-                </DetailRow>
-                <DetailRow label="Latency">
-                  {health.latencyMs === null ? '—' : `${health.latencyMs} ms`}
-                </DetailRow>
-                <DetailRow label="Service">
-                  <span className="mono">{health.data?.service ?? '—'}</span>
-                </DetailRow>
-                <DetailRow label="API version">
-                  <span className="mono">{health.data?.version ?? '—'}</span>
-                </DetailRow>
-              </div>
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardHeader title="Environment" description="Resolved from environment variables at build and run time." />
-            <CardBody flush>
-              <div className="detail-list">
-                <DetailRow label="Frontend mode">
-                  <Badge tone="outline">{config.appEnv}</Badge>
-                </DetailRow>
-                <DetailRow label="Backend environment">
-                  {health.data?.environment ? (
-                    <Badge tone="outline">{health.data.environment}</Badge>
-                  ) : (
-                    '—'
-                  )}
-                </DetailRow>
-                <DetailRow label="Backend uptime">
-                  {health.data?.uptimeSeconds === undefined ? '—' : `${health.data.uptimeSeconds}s`}
-                </DetailRow>
-                <DetailRow label="AWS credentials in browser">
-                  <Badge tone="success">None</Badge>
-                </DetailRow>
-                <DetailRow label="Lab connection">
-                  <Badge tone="outline">Not wired yet</Badge>
-                </DetailRow>
-              </div>
-            </CardBody>
-          </Card>
-        </div>
-      </section>
-
-      <section className="section">
-        <ResetLabCard />
-      </section>
-
-      <section className="section">
-        <div className="section__header">
-          <h2 className="section__title">Capabilities</h2>
-          <p className="section__hint">Read live from the API index</p>
-        </div>
-
-        {index.status === 'error' ? (
-          <Card>
-            <CardBody>
-              <EmptyState icon="plug" title="API unreachable">
-                {index.error?.message}. Start the backend with <code>npm start</code> in{' '}
-                <code>backend/</code>, then refresh.
-              </EmptyState>
-            </CardBody>
-          </Card>
-        ) : (
-          <div className="capability-grid">
-            {capabilities.map(([key, value]) => {
-              const copy = CAPABILITY_COPY[key] ?? { icon: 'cloud', title: key, body: '' };
-              const live = value.status === 'available';
-              return (
-                <Card key={key} interactive className="capability">
-                  <div className="capability__top">
-                    <span className="capability__icon">
-                      <Icon name={copy.icon} size={16} />
-                    </span>
-                    <Badge tone={live ? 'success' : 'outline'}>
-                      {live ? 'Available' : 'Planned'}
-                    </Badge>
-                  </div>
-                  <div>
-                    <p className="capability__name">{copy.title}</p>
-                    <p className="capability__description">{copy.body}</p>
-                  </div>
-                  <p className="capability__path">{value.path}</p>
-                </Card>
-              );
-            })}
+      {status === 'loading' ? (
+        <>
+          <div className="summary-grid">
+            {Array.from({ length: 6 }, (_, index) => (
+              <SkeletonCard key={index} rows={2} />
+            ))}
           </div>
-        )}
-      </section>
+          <SkeletonCard rows={4} />
+        </>
+      ) : null}
+
+      {status === 'error' ? (
+        <Card>
+          <CardBody>
+            <EmptyState icon="plug" title="Could not reach the API">
+              {error?.message}. The backend must be running and able to reach AWS.
+            </EmptyState>
+            <div className="empty__actions">
+              <Button variant="primary" onClick={reload}>
+                <Icon name="refresh" size={14} />
+                Try again
+              </Button>
+            </div>
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {data ? (
+        <>
+          {data.partial ? (
+            <Callout
+              tone="warning"
+              title={`${data.unavailableSections.length} section(s) could not be loaded`}
+              actions={
+                <Button onClick={reload} disabled={busy}>
+                  Retry
+                </Button>
+              }
+            >
+              {data.unavailableSections.map((entry) => (
+                <p key={entry.section}>
+                  <strong>{entry.section}</strong>: {entry.error}
+                </p>
+              ))}
+              Everything else below is current.
+            </Callout>
+          ) : null}
+
+          <div className="summary-grid">
+            <SummaryTile
+              to="/infrastructure"
+              label="AWS resources"
+              icon="server"
+              value={data.resources.total}
+              hint={`${data.resources.servicesDetected} services discovered`}
+              unavailable={!data.resources.available}
+            />
+            <SummaryTile
+              to="/cost"
+              label="Month to date"
+              icon="cost"
+              value={formatCurrency(data.cost.usageCost, data.cost.currency)}
+              hint={
+                data.cost.changePercent !== null
+                  ? `${formatPercent(data.cost.changePercent, { signed: true })} vs previous period · not real time`
+                  : 'usage cost · billing data is delayed'
+              }
+              unavailable={!data.cost.available || !data.cost.dataAvailable}
+            />
+            <SummaryTile
+              to="/issues"
+              label="Active issues"
+              icon="issues"
+              value={data.health.totalIssues}
+              hint={`across ${data.health.resourcesWithIssues} resources`}
+              unavailable={!data.health.available}
+            />
+            <SummaryTile
+              to="/issues"
+              label="Critical & high"
+              icon="issues"
+              value={criticalAndHigh}
+              tone={criticalAndHigh > 0 ? 'danger' : undefined}
+              hint={criticalAndHigh > 0 ? 'need attention first' : 'none outstanding'}
+              unavailable={!data.health.available}
+            />
+            <SummaryTile
+              to="/remediation"
+              label="Remediation"
+              icon="remediation"
+              value={
+                data.remediation.total === 0
+                  ? 'None planned'
+                  : `${data.remediation.verified} / ${data.remediation.executable}`
+              }
+              hint={
+                data.remediation.total === 0
+                  ? 'build plans from detected issues'
+                  : `${data.remediation.awaitingApproval} awaiting approval`
+              }
+              unavailable={!data.remediation.available}
+            />
+            <SummaryTile
+              to="/lab"
+              label="Lab state"
+              icon="reset"
+              value={labState.label}
+              tone={labState.tone === 'success' ? undefined : 'warning'}
+              hint={
+                data.lab.automationEnabled
+                  ? `auto-checked every ${data.lab.intervalHours}h`
+                  : 'automation off'
+              }
+              unavailable={!data.lab.available}
+            />
+          </div>
+
+          <section className="section">
+            <div className="two-column two-column--wide">
+              <Card>
+                <CardHeader
+                  title="Environment health"
+                  description="Deterministic findings from CloudWatch metrics, logs and configuration."
+                  actions={data.health.available ? <Freshness at={data.health.retrievedAt} label="" /> : null}
+                />
+                <CardBody>
+                  {!data.health.available ? (
+                    <EmptyState icon="plug" title="Health data unavailable">
+                      {data.health.error}
+                    </EmptyState>
+                  ) : (
+                    <>
+                      <div className="overview-health">
+                        <div className="overview-health__score">
+                          <span className={`overview-health__value tabular overview-health__value--${HEALTH_TONE[data.health.status] ?? 'neutral'}`}>
+                            {data.health.score}
+                          </span>
+                          <span className="overview-health__label">health score</span>
+                        </div>
+                        <div className="overview-health__severities">
+                          {SEVERITY_ORDER.filter((name) => name !== 'info').map((name) => (
+                            <Link key={name} to="/issues" className="overview-sev">
+                              <span className={`overview-sev__dot overview-sev__dot--${SEVERITY_TONE[name]}`} />
+                              <span className="overview-sev__count tabular">{severity[name] ?? 0}</span>
+                              <span className="overview-sev__label">{name}</span>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+
+                      {data.health.topIssues.length > 0 ? (
+                        <ul className="overview-issues">
+                          {data.health.topIssues.map((issue) => (
+                            <li key={issue.id} className="overview-issue">
+                              <Badge tone={SEVERITY_TONE[issue.severity]}>{issue.severity}</Badge>
+                              <Link className="overview-issue__title" to="/issues">
+                                {issue.title}
+                              </Link>
+                              <Link
+                                className="overview-issue__resource mono"
+                                to={`/architecture?focus=${encodeURIComponent(issue.resourceId ?? '')}`}
+                                title="Show this resource in the architecture"
+                              >
+                                {issue.resource}
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="overview-note">
+                          No findings in the last {data.health.windowHours}h window.
+                        </p>
+                      )}
+
+                      {data.health.metricsUnavailable > 0 ? (
+                        <p className="overview-note">
+                          {data.health.metricsUnavailable} metrics had no data in this window and are reported
+                          as unavailable rather than zero.
+                        </p>
+                      ) : null}
+                    </>
+                  )}
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader
+                  title="Spend"
+                  description="Account-wide, from Cost Explorer."
+                  actions={
+                    data.cost.available ? <Badge tone="warning">not real time</Badge> : null
+                  }
+                />
+                <CardBody>
+                  {!data.cost.available || !data.cost.dataAvailable ? (
+                    <EmptyState icon="cost" title="Cost data unavailable">
+                      {data.cost.error ?? 'Cost Explorer returned no data for this account.'}
+                    </EmptyState>
+                  ) : (
+                    <div className="detail-list">
+                      <div className="detail-row">
+                        <span className="detail-row__key">Usage cost · {data.cost.period}</span>
+                        <span className="detail-row__value tabular">
+                          {formatCurrency(data.cost.usageCost, data.cost.currency)}
+                        </span>
+                      </div>
+                      <div className="detail-row">
+                        <span className="detail-row__key">Actually billed</span>
+                        <span className="detail-row__value tabular">
+                          {formatCurrency(data.cost.netCost, data.cost.currency)}
+                        </span>
+                      </div>
+                      {data.cost.topService ? (
+                        <div className="detail-row">
+                          <span className="detail-row__key">Largest driver</span>
+                          <span className="detail-row__value">
+                            {data.cost.topService.service} ·{' '}
+                            <span className="tabular">{formatPercent(data.cost.topService.percentage)}</span>
+                          </span>
+                        </div>
+                      ) : null}
+                      <div className="detail-row">
+                        <span className="detail-row__key">Latest billing day</span>
+                        <span className="detail-row__value">{data.cost.lastAvailableDate ?? EMPTY}</span>
+                      </div>
+                    </div>
+                  )}
+                </CardBody>
+              </Card>
+            </div>
+          </section>
+
+          <section className="section">
+            <Card>
+              <CardHeader
+                title="Where to go next"
+                description="The environment tells one story; each step of it has its own view."
+              />
+              <CardBody>
+                <ol className="journey">
+                  {[
+                    { to: '/architecture', title: 'Architecture', body: 'What exists and how it connects' },
+                    { to: '/cost', title: 'Costs', body: 'What it spends and where' },
+                    { to: '/issues', title: 'Health & issues', body: 'What is wrong, with evidence' },
+                    { to: '/ai', title: 'AI analysis', body: 'Root cause reasoning over that evidence' },
+                    { to: '/remediation', title: 'Remediation', body: 'Approve a fix, apply it, verify it' },
+                    { to: '/lab', title: 'Lab control', body: 'Reset the environment and start again' },
+                  ].map((step, index) => (
+                    <li key={step.to} className="journey__step">
+                      <Link className="journey__link" to={step.to}>
+                        <span className="journey__index tabular">{index + 1}</span>
+                        <span className="journey__body">
+                          <span className="journey__title">{step.title}</span>
+                          <span className="journey__text">{step.body}</span>
+                        </span>
+                        <Icon name="chevron" size={14} className="journey__chevron" />
+                      </Link>
+                    </li>
+                  ))}
+                </ol>
+              </CardBody>
+            </Card>
+          </section>
+
+          <p className="overview-footnote">
+            <StatusIndicator tone="success" label="No AWS credentials reach the browser" /> · every figure is
+            read from AWS by the backend · assembled in {(data.durationMs / 1000).toFixed(1)}s
+          </p>
+        </>
+      ) : null}
     </>
   );
 }

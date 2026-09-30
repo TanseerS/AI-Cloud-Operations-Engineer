@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { formatCurrency, formatPercent } from '../../lib/currency.js';
 
@@ -11,6 +12,10 @@ import { formatCurrency, formatPercent } from '../../lib/currency.js';
  *
  * One measure, one hue. The bars encode magnitude, not identity, so a categorical
  * palette here would imply a distinction that does not exist.
+ *
+ * A service that maps onto discovered resources links through to them. That mapping is a
+ * name correspondence, not a causal claim: it says these resources are the ones billed
+ * under this line, not that any particular one caused the charge.
  */
 export function ServiceBreakdown({ services, currency }) {
   const [hovered, setHovered] = useState(null);
@@ -36,9 +41,14 @@ export function ServiceBreakdown({ services, currency }) {
             <span className="breakdown__name" title={entry.service}>
               <span className="breakdown__label">{entry.service}</span>
               {entry.discoveryService ? (
-                <span className="breakdown__linked" title="Can be correlated with discovered resources">
-                  linked
-                </span>
+                <Link
+                  className="breakdown__linked"
+                  to={`/infrastructure#${entry.discoveryService}`}
+                  title={`This billing line maps to discovered ${entry.discoveryService} resources`}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {entry.discoveryService}
+                </Link>
               ) : null}
             </span>
 

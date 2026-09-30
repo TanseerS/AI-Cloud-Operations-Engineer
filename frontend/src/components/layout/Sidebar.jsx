@@ -5,12 +5,13 @@ import config from '../../lib/config.js';
 
 export const NAV_ITEMS = [
   { to: '/', label: 'Overview', icon: 'overview', end: true },
-  { to: '/infrastructure', label: 'Infrastructure', icon: 'server' },
   { to: '/architecture', label: 'Architecture', icon: 'architecture' },
-  { to: '/cost', label: 'Cost', icon: 'cost' },
-  { to: '/issues', label: 'Issues', icon: 'issues' },
+  { to: '/infrastructure', label: 'Infrastructure', icon: 'server' },
+  { to: '/cost', label: 'Costs', icon: 'cost' },
+  { to: '/issues', label: 'Health & issues', icon: 'issues' },
   { to: '/ai', label: 'AI analysis', icon: 'sparkle' },
   { to: '/remediation', label: 'Remediation', icon: 'remediation' },
+  { to: '/lab', label: 'Lab control', icon: 'reset' },
 ];
 
 export function Sidebar({ open, onNavigate, region }) {

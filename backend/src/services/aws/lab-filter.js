@@ -45,7 +45,10 @@ const PREFIX = config.aws.labPrefix;
 export function matchesNamingConvention(name) {
   if (typeof name !== 'string' || name.length === 0) return false;
   // The automation's own resources use the same prefix but are not part of the lab.
-  if (/^(?:\/aws\/lambda\/)?aicoe-lab-(?:autonomous-manager|automation-role|scheduler-role|autonomous-check)$/.test(name)) {
+  if (
+    /^(?:\/aws\/lambda\/)?aicoe-lab-(?:autonomous-manager|automation-role|scheduler-role|autonomous-check)$/.test(name) ||
+    name.startsWith(`/${PREFIX}/automation/`)
+  ) {
     return false;
   }
 
