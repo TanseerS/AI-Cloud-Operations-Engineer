@@ -1,3 +1,5 @@
+import { useSearchParams } from 'react-router-dom';
+
 import PageHeader from '../components/layout/PageHeader.jsx';
 import Card, { CardBody } from '../components/ui/Card.jsx';
 import StatTile from '../components/ui/StatTile.jsx';
@@ -15,6 +17,11 @@ import { formatDuration, formatRelative } from '../lib/format.js';
 
 export function ArchitecturePage() {
   const architecture = useApiResource(api.architecture);
+  // Findings are loaded alongside the topology so a node can carry its own health.
+  // A failure here degrades the overlay only - the graph still renders.
+  const health = useApiResource(api.health);
+  const [searchParams] = useSearchParams();
+  const focusId = searchParams.get('focus');
   const { data, status, error, reload } = architecture;
 
   const isBusy = status === 'loading' || status === 'refreshing';
@@ -181,7 +188,12 @@ export function ArchitecturePage() {
                 ) : null}
 
                 <Card className="arch-card">
-                  <ArchitectureGraph graph={data} serviceLabels={serviceLabels} />
+                  <ArchitectureGraph
+                    graph={data}
+                    serviceLabels={serviceLabels}
+                    resourceHealth={health.data?.resourceHealth ?? []}
+                    focusId={focusId}
+                  />
                 </Card>
 
                 <div className="arch-legend">
@@ -199,9 +211,18 @@ export function ArchitecturePage() {
                         </Badge>
                       ))}
                   </span>
+                  <span className="arch-legend__group">
+                    {health.data ? (
+                      <Badge tone={health.data.summary.totalIssues > 0 ? 'warning' : 'success'}>
+                        {health.data.summary.totalIssues} findings overlaid
+                      </Badge>
+                    ) : health.status === 'error' ? (
+                      <Badge tone="outline">health overlay unavailable</Badge>
+                    ) : null}
+                  </span>
                   <span className="arch-legend__hint">
                     Click a node for details. Dashed lines rest on an AWS default rather than an
-                    explicit setting.
+                    explicit setting. A node's dot reflects its worst finding.
                   </span>
                 </div>
               </>

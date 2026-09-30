@@ -15,7 +15,9 @@ function displayName(name) {
 
 const STATUS_CLASS = {
   healthy: 'arch-node__dot--success',
+  success: 'arch-node__dot--success',
   warning: 'arch-node__dot--warning',
+  danger: 'arch-node__dot--danger',
   failing: 'arch-node__dot--danger',
 };
 
@@ -24,9 +26,14 @@ const STATUS_CLASS = {
  * status dot with its label. Colour is carried by the dot alone, so a graph of healthy
  * resources reads as neutral rather than as a wall of green.
  */
+const HEALTH_CLASS = { critical: 'danger', high: 'danger', medium: 'warning', low: 'warning', info: 'success' };
+
 export function ResourceNode({ data, selected }) {
   const presentation = presentationFor(data.service);
-  const level = data.status?.level ?? 'unknown';
+  // Findings override the discovery status: an Active function with a 100% error rate
+  // is not healthy, whatever its Lambda State says.
+  const worst = data.health?.worstSeverity;
+  const level = worst ? HEALTH_CLASS[worst] : (data.status?.level ?? 'unknown');
 
   return (
     <div
@@ -47,7 +54,15 @@ export function ResourceNode({ data, selected }) {
         </span>
       </span>
 
-      <span className="arch-node__status" title={data.status?.label}>
+      <span
+        className="arch-node__status"
+        title={worst ? `${data.health.issueCount} finding(s), worst: ${worst}` : data.status?.label}
+      >
+        {data.health?.issueCount ? (
+          <span className={`arch-node__issues arch-node__issues--${HEALTH_CLASS[worst]}`}>
+            {data.health.issueCount}
+          </span>
+        ) : null}
         <span className={`arch-node__dot ${STATUS_CLASS[level] ?? ''}`} />
       </span>
 

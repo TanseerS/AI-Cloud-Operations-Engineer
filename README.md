@@ -12,8 +12,9 @@ reliability problems, and proposes or applies fixes.
 | AWS resource discovery | Done |
 | Interactive architecture map | Done |
 | Cost analysis | Done |
+| CloudWatch health & issue detection | Done |
 | Reset mechanism | Not started |
-| CloudWatch / Bedrock analysis | Not started |
+| Bedrock reasoning | Not started |
 | Detection / remediation agent | Not started |
 
 The application discovers the real AWS lab inventory end to end. The remaining analysis
@@ -31,6 +32,8 @@ backend/                 Node + Express API - the only tier that will hold AWS a
       discovery/         One collector per AWS service, registered in index.js
       architecture/      Relationship rules and the graph builder
       cost/              Cost Explorer queries, period maths, service mapping
+      cloudwatch/        Bounded metric and log collection, log redaction
+      health/            Fact model and the deterministic detection rules
     middleware/          Request logging, 404, error to response
     lib/                 Typed errors and small helpers
 frontend/                React + Vite dashboard - never holds AWS credentials
@@ -40,6 +43,7 @@ frontend/                React + Vite dashboard - never holds AWS credentials
     components/infrastructure/  Service sections and expandable resource cards
     components/architecture/    Graph canvas, nodes, layout and detail panel
     components/cost/            Trend chart, service breakdown, cost drivers
+    components/health/          Health score, severity tiles, issue cards, evidence
     context/             App-wide API health, polled once
     hooks/               Theme and API-resource hooks
     lib/                 Config and the single API client
@@ -82,7 +86,7 @@ Base path `/api/v1`. Only health is implemented.
 | GET | `/api/v1/infrastructure/resources` | Available - live AWS inventory |
 | GET | `/api/v1/architecture/graph` | Available - topology derived from discovery |
 | GET | `/api/v1/costs` | Available - Cost Explorer analysis |
-| GET | `/api/v1/cloudwatch` | 501 |
+| GET | `/api/v1/health/analysis` | Available - CloudWatch health & findings |
 | GET | `/api/v1/bedrock/analysis` | 501 |
 | POST | `/api/v1/remediation` | 501 |
 | POST | `/api/v1/lab/reset` | 501 |
@@ -128,6 +132,13 @@ target was itself discovered, so the diagram never points at something unverifie
 `GET /api/v1/costs` reports usage cost and net billed cost separately, because credits
 make them different numbers. Billing data is never presented as live. See
 [docs/cost-analysis.md](docs/cost-analysis.md).
+
+## Health and issue detection
+
+`GET /api/v1/health/analysis` collects CloudWatch metrics, log samples and configuration
+as **facts**, then runs deterministic rules over them to produce **issues** that cite the
+facts behind them. No model is involved. See
+[docs/health-analysis.md](docs/health-analysis.md).
 
 ## The lab
 

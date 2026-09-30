@@ -57,6 +57,8 @@ export const api = {
   infrastructure: () => request('/infrastructure/resources', { timeoutMs: 30000 }),
   architecture: () => request('/architecture/graph', { timeoutMs: 30000 }),
   costs: () => request('/costs', { timeoutMs: 30000 }),
+  // Health analysis fans out across discovery, CloudWatch metrics and logs.
+  health: () => request('/health/analysis', { timeoutMs: 45000 }),
 };
 
 export default api;

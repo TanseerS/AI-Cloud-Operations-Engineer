@@ -4,7 +4,6 @@ import healthRoute from './health.route.js';
 import infrastructureRoute from './infrastructure.route.js';
 import architectureRoute from './architecture.route.js';
 import costRoute from './cost.route.js';
-import cloudwatchRoute from './cloudwatch.route.js';
 import bedrockRoute from './bedrock.route.js';
 import remediationRoute from './remediation.route.js';
 import labRoute from './lab.route.js';
@@ -21,10 +20,10 @@ router.get('/', (_req, res) => {
     service: 'aicoe-api',
     endpoints: {
       health: { path: '/api/v1/health', status: 'available' },
+      healthAnalysis: { path: '/api/v1/health/analysis', status: 'available' },
       infrastructure: { path: '/api/v1/infrastructure/resources', status: 'available' },
       architecture: { path: '/api/v1/architecture/graph', status: 'available' },
       costs: { path: '/api/v1/costs', status: 'available' },
-      cloudwatch: { path: '/api/v1/cloudwatch', status: 'planned' },
       bedrock: { path: '/api/v1/bedrock/analysis', status: 'planned' },
       remediation: { path: '/api/v1/remediation', status: 'planned' },
       lab: { path: '/api/v1/lab/reset', status: 'planned' },
@@ -36,7 +35,6 @@ router.use('/health', healthRoute);
 router.use('/infrastructure', infrastructureRoute);
 router.use('/architecture', architectureRoute);
 router.use('/costs', costRoute);
-router.use('/cloudwatch', cloudwatchRoute);
 router.use('/bedrock', bedrockRoute);
 router.use('/remediation', remediationRoute);
 router.use('/lab', labRoute);

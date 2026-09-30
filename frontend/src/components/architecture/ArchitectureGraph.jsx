@@ -33,9 +33,19 @@ function useLayoutDirection() {
   return direction;
 }
 
-export function ArchitectureGraph({ graph, serviceLabels }) {
+export function ArchitectureGraph({ graph, serviceLabels, resourceHealth = [], focusId = null }) {
   const direction = useLayoutDirection();
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState(focusId);
+
+  // A link from a finding opens the graph with that resource already selected.
+  useEffect(() => {
+    if (focusId) setSelectedId(focusId);
+  }, [focusId]);
+
+  const healthByResource = useMemo(
+    () => new Map(resourceHealth.map((entry) => [entry.resourceId, entry])),
+    [resourceHealth],
+  );
 
   const { flowNodes, flowEdges } = useMemo(() => {
     const positioned = layoutGraph(graph.nodes, graph.edges, direction);
@@ -47,6 +57,9 @@ export function ArchitectureGraph({ graph, serviceLabels }) {
         position: node.position,
         data: {
           ...node,
+          // A node's dot reflects its worst finding, so the diagram and the issue list
+          // can never disagree about which resource is in trouble.
+          health: healthByResource.get(node.id) ?? null,
           serviceLabel: serviceLabels[node.service] ?? node.service,
           sourcePosition: direction === 'LR' ? Position.Right : Position.Bottom,
           targetPosition: direction === 'LR' ? Position.Left : Position.Top,
@@ -67,7 +80,7 @@ export function ArchitectureGraph({ graph, serviceLabels }) {
         data: edge,
       })),
     };
-  }, [graph, direction, serviceLabels]);
+  }, [graph, direction, serviceLabels, healthByResource]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(flowNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(flowEdges);
@@ -79,6 +92,13 @@ export function ArchitectureGraph({ graph, serviceLabels }) {
 
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedId)?.data ?? null,
+    [nodes, selectedId],
+  );
+
+  // React Flow reads `selected` off the node, so our selection has to be projected onto
+  // it - otherwise the panel opens while the node stays unhighlighted.
+  const renderedNodes = useMemo(
+    () => nodes.map((node) => ({ ...node, selected: node.id === selectedId })),
     [nodes, selectedId],
   );
 
@@ -112,7 +132,7 @@ export function ArchitectureGraph({ graph, serviceLabels }) {
   return (
     <div className={`arch-canvas${selectedNode ? ' arch-canvas--with-panel' : ''}`}>
       <ReactFlow
-        nodes={nodes}
+        nodes={renderedNodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}

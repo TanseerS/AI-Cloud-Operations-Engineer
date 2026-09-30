@@ -4,6 +4,7 @@ import { ApiGatewayV2Client } from '@aws-sdk/client-apigatewayv2';
 import { SSMClient } from '@aws-sdk/client-ssm';
 import { ResourceGroupsTaggingAPIClient } from '@aws-sdk/client-resource-groups-tagging-api';
 import { IAMClient } from '@aws-sdk/client-iam';
+import { CloudWatchClient } from '@aws-sdk/client-cloudwatch';
 
 import config from '../../config/index.js';
 
@@ -30,6 +31,7 @@ function memoize(factory) {
 
 export const getLambdaClient = memoize(() => new LambdaClient(SHARED));
 export const getLogsClient = memoize(() => new CloudWatchLogsClient(SHARED));
+export const getMetricsClient = memoize(() => new CloudWatchClient(SHARED));
 export const getApiGatewayClient = memoize(() => new ApiGatewayV2Client(SHARED));
 export const getSsmClient = memoize(() => new SSMClient(SHARED));
 export const getTaggingClient = memoize(() => new ResourceGroupsTaggingAPIClient(SHARED));
