@@ -56,6 +56,7 @@ export const api = {
   // health check.
   infrastructure: () => request('/infrastructure/resources', { timeoutMs: 30000 }),
   architecture: () => request('/architecture/graph', { timeoutMs: 30000 }),
+  costs: () => request('/costs', { timeoutMs: 30000 }),
 };
 
 export default api;

@@ -91,6 +91,12 @@
   --transition-fast: 120ms cubic-bezier(0.2, 0, 0.2, 1);
   --transition-base: 160ms cubic-bezier(0.2, 0, 0.2, 1);
 
+  /* Chart marks. Validated against the chart surface in both modes: single hue,
+     inside the lightness band, above the chroma floor, >=3:1 contrast. */
+  --chart-mark: #2f5fe0;
+  --chart-mark-fill: rgba(47, 95, 224, 0.13);
+  --chart-grid: var(--color-border);
+
   --layout-sidebar: 232px;
   --layout-topbar: 56px;
   --layout-max: 1360px;
@@ -127,6 +133,9 @@
     --color-info: #6b95f5;
     --color-info-soft: #1a2333;
     --color-neutral-soft: #1d232b;
+
+    --chart-mark: #6390f2;
+    --chart-mark-fill: rgba(99, 144, 242, 0.16);
 
     --glass-bg: rgba(20, 24, 30, 0.76);
     --glass-border: rgba(38, 45, 54, 0.9);
@@ -167,6 +176,9 @@
   --color-info: #6b95f5;
   --color-info-soft: #1a2333;
   --color-neutral-soft: #1d232b;
+
+  --chart-mark: #6390f2;
+  --chart-mark-fill: rgba(99, 144, 242, 0.16);
 
   --glass-bg: rgba(20, 24, 30, 0.76);
   --glass-border: rgba(38, 45, 54, 0.9);

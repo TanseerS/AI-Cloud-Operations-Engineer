@@ -23,7 +23,7 @@ router.get('/', (_req, res) => {
       health: { path: '/api/v1/health', status: 'available' },
       infrastructure: { path: '/api/v1/infrastructure/resources', status: 'available' },
       architecture: { path: '/api/v1/architecture/graph', status: 'available' },
-      cost: { path: '/api/v1/cost', status: 'planned' },
+      costs: { path: '/api/v1/costs', status: 'available' },
       cloudwatch: { path: '/api/v1/cloudwatch', status: 'planned' },
       bedrock: { path: '/api/v1/bedrock/analysis', status: 'planned' },
       remediation: { path: '/api/v1/remediation', status: 'planned' },
@@ -35,7 +35,7 @@ router.get('/', (_req, res) => {
 router.use('/health', healthRoute);
 router.use('/infrastructure', infrastructureRoute);
 router.use('/architecture', architectureRoute);
-router.use('/cost', costRoute);
+router.use('/costs', costRoute);
 router.use('/cloudwatch', cloudwatchRoute);
 router.use('/bedrock', bedrockRoute);
 router.use('/remediation', remediationRoute);

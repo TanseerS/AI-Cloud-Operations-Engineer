@@ -11,8 +11,9 @@ reliability problems, and proposes or applies fixes.
 | Application foundation (frontend + API) | Done |
 | AWS resource discovery | Done |
 | Interactive architecture map | Done |
+| Cost analysis | Done |
 | Reset mechanism | Not started |
-| Cost / CloudWatch / Bedrock analysis | Not started |
+| CloudWatch / Bedrock analysis | Not started |
 | Detection / remediation agent | Not started |
 
 The application discovers the real AWS lab inventory end to end. The remaining analysis
@@ -29,6 +30,7 @@ backend/                 Node + Express API - the only tier that will hold AWS a
       aws/               SDK client factory and the reusable lab-resource filter
       discovery/         One collector per AWS service, registered in index.js
       architecture/      Relationship rules and the graph builder
+      cost/              Cost Explorer queries, period maths, service mapping
     middleware/          Request logging, 404, error to response
     lib/                 Typed errors and small helpers
 frontend/                React + Vite dashboard - never holds AWS credentials
@@ -37,6 +39,7 @@ frontend/                React + Vite dashboard - never holds AWS credentials
     components/ui/       Card, Badge, Button, StatTile, StatusIndicator, EmptyState, Icon
     components/infrastructure/  Service sections and expandable resource cards
     components/architecture/    Graph canvas, nodes, layout and detail panel
+    components/cost/            Trend chart, service breakdown, cost drivers
     context/             App-wide API health, polled once
     hooks/               Theme and API-resource hooks
     lib/                 Config and the single API client
@@ -78,7 +81,7 @@ Base path `/api/v1`. Only health is implemented.
 | GET | `/api/v1` | Available - lists the capability surface |
 | GET | `/api/v1/infrastructure/resources` | Available - live AWS inventory |
 | GET | `/api/v1/architecture/graph` | Available - topology derived from discovery |
-| GET | `/api/v1/cost` | 501 |
+| GET | `/api/v1/costs` | Available - Cost Explorer analysis |
 | GET | `/api/v1/cloudwatch` | 501 |
 | GET | `/api/v1/bedrock/analysis` | 501 |
 | POST | `/api/v1/remediation` | 501 |
@@ -119,6 +122,12 @@ partial-failure contract.
 derived from a field in a resource's own AWS configuration and is only drawn when the
 target was itself discovered, so the diagram never points at something unverified. See
 [docs/architecture-graph.md](docs/architecture-graph.md).
+
+## Cost analysis
+
+`GET /api/v1/costs` reports usage cost and net billed cost separately, because credits
+make them different numbers. Billing data is never presented as live. See
+[docs/cost-analysis.md](docs/cost-analysis.md).
 
 ## The lab
 
