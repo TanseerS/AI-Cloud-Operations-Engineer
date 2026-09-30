@@ -7,6 +7,7 @@ import {
   getRemediationPlans,
   getRemediationPlan,
   approveRemediationPlan,
+  executeRemediationPlan,
 } from '../services/remediation.service.js';
 
 const router = Router();
@@ -59,6 +60,25 @@ router.post(
     });
     if (!plan) throw new NotFoundError(`No remediation plan with id ${req.params.id}`);
     res.status(200).json({ plan, executionPerformed: false });
+  }),
+);
+
+/**
+ * POST /api/v1/remediation/plans/:id/execute
+ *
+ * Applies an approved plan. The request carries an id and nothing else - the stored plan
+ * is the only source of truth for what runs, so no operation name or parameter can be
+ * supplied by the caller.
+ *
+ * Every safety check from planning is re-run against freshly discovered AWS state before
+ * anything is changed.
+ */
+router.post(
+  '/plans/:id/execute',
+  asyncHandler(async (req, res) => {
+    const result = await executeRemediationPlan(req.params.id);
+    if (!result) throw new NotFoundError(`No remediation plan with id ${req.params.id}`);
+    res.status(200).json(result);
   }),
 );
 

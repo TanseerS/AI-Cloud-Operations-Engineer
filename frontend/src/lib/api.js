@@ -73,6 +73,10 @@ export const api = {
   planRemediation: () => request('/remediation/plan', { method: 'POST', timeoutMs: 120000 }),
   approvePlan: (id) =>
     request(`/remediation/plans/${encodeURIComponent(id)}/approve`, { method: 'POST', timeoutMs: 20000 }),
+  // Execution re-discovers AWS, applies the change, waits for it to settle and re-runs
+  // the detector, so it needs a long window.
+  executePlan: (id) =>
+    request(`/remediation/plans/${encodeURIComponent(id)}/execute`, { method: 'POST', timeoutMs: 180000 }),
 };
 
 export default api;

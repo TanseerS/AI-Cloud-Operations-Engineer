@@ -23,6 +23,8 @@ export function RemediationPage() {
   const stored = useApiResource(api.remediationPlans);
   const [planning, setPlanning] = useState(false);
   const [approvingId, setApprovingId] = useState(null);
+  const [executingId, setExecutingId] = useState(null);
+  const [lastExecution, setLastExecution] = useState(null);
   const [error, setError] = useState(null);
   const [lastRun, setLastRun] = useState(null);
 
@@ -56,11 +58,31 @@ export function RemediationPage() {
     [stored],
   );
 
+  const execute = useCallback(
+    async (id) => {
+      setExecutingId(id);
+      setError(null);
+      setLastExecution(null);
+      try {
+        const { data } = await api.executePlan(id);
+        setLastExecution(data);
+        stored.reload();
+      } catch (requestError) {
+        setError(requestError);
+      } finally {
+        setExecutingId(null);
+      }
+    },
+    [stored],
+  );
+
   const plans = stored.data?.plans ?? [];
   const executable = plans.filter((plan) => plan.planType === 'executable');
   const advisory = plans.filter((plan) => plan.planType !== 'executable');
   const approved = executable.filter((plan) => plan.status === 'approved');
   const awaiting = executable.filter((plan) => plan.status === 'proposed');
+  const verified = executable.filter((plan) => plan.status === 'verified');
+  const failed = executable.filter((plan) => plan.status === 'failed');
   const guardrails = lastRun?.guardrails;
 
   const loading = stored.status === 'loading';
@@ -75,7 +97,7 @@ export function RemediationPage() {
             {plans.length > 0 ? (
               <StatusIndicator
                 tone={awaiting.length > 0 ? 'warning' : 'success'}
-                label={`${approved.length} approved · ${awaiting.length} awaiting`}
+                label={`${verified.length} verified · ${approved.length} ready · ${awaiting.length} awaiting`}
                 pulse={planning}
               />
             ) : null}
@@ -97,6 +119,37 @@ export function RemediationPage() {
         </span>
         <Badge tone="success">no execution in this stage</Badge>
       </div>
+
+      {executingId ? (
+        <Callout tone="info" title="Applying the change to AWS">
+          Re-verifying the target, capturing the current configuration, applying the approved operation,
+          then re-running the detector against live CloudWatch. This takes up to a minute.
+        </Callout>
+      ) : null}
+
+      {lastExecution ? (
+        <Callout
+          tone={
+            lastExecution.outcome === 'verified'
+              ? 'info'
+              : lastExecution.outcome === 'already_verified' || lastExecution.outcome === 'already_in_desired_state'
+                ? 'info'
+                : 'warning'
+          }
+          title={
+            {
+              verified: 'Remediation verified',
+              already_verified: 'Already verified — nothing was executed again',
+              already_in_desired_state: 'Already in the desired state — no AWS change was made',
+              verification_failed: 'AWS accepted the change, but the issue is still detected',
+              rejected: 'Execution rejected by the safety gate',
+              aws_error: 'The AWS operation failed',
+            }[lastExecution.outcome] ?? 'Execution finished'
+          }
+        >
+          {lastExecution.message}
+        </Callout>
+      ) : null}
 
       {error ? (
         <Callout
@@ -158,10 +211,15 @@ export function RemediationPage() {
       {plans.length > 0 ? (
         <>
           <div className="stat-grid">
-            <StatTile label="Executable plans" icon="remediation" value={executable.length} hint="Mapped to an allowlisted action" />
-            <StatTile label="Awaiting approval" icon="issues" value={awaiting.length} hint="Reviewed but not yet approved" />
-            <StatTile label="Approved" icon="activity" value={approved.length} hint="Ready for execution" />
-            <StatTile label="Recommendation only" icon="cloud" value={advisory.length} hint="No safe automated action" />
+            <StatTile label="Verified" icon="activity" value={verified.length} hint="Applied and confirmed resolved" />
+            <StatTile label="Ready to execute" icon="remediation" value={approved.length} hint="Approved, not yet applied" />
+            <StatTile label="Awaiting approval" icon="issues" value={awaiting.length} hint="Reviewed but not approved" />
+            <StatTile
+              label={failed.length ? 'Failed' : 'Recommendation only'}
+              icon={failed.length ? 'issues' : 'cloud'}
+              value={failed.length || advisory.length}
+              hint={failed.length ? 'Applied but not resolved' : 'No safe automated action'}
+            />
           </div>
 
           {lastRun?.ai?.used === false ? (
@@ -189,7 +247,14 @@ export function RemediationPage() {
             ) : (
               <div className="plan-list">
                 {executable.map((plan) => (
-                  <PlanCard key={plan.id} plan={plan} onApprove={approve} approving={approvingId === plan.id} />
+                  <PlanCard
+                    key={plan.id}
+                    plan={plan}
+                    onApprove={approve}
+                    onExecute={execute}
+                    approving={approvingId === plan.id}
+                    executing={executingId === plan.id}
+                  />
                 ))}
               </div>
             )}

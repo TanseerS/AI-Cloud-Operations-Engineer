@@ -1,10 +1,13 @@
 import config from '../config/index.js';
+import { describeAwsError } from './aws/clients.js';
 import { discoverResources } from './discovery.service.js';
 import { getHealthAnalysis } from './health.service.js';
 import { getCachedAiAnalysis } from './bedrock.service.js';
 import { lookupAction, RECOMMENDATION_ONLY_REASONS } from './remediation/registry.js';
 import { evaluateSafety, REQUIRED_TAGS } from './remediation/safety.js';
 import { listPlans, getPlan, upsertPlans, updatePlan } from './remediation/store.js';
+import { captureStateFor, executorFor } from './remediation/executors.js';
+import { verifyRemediation, compareState } from './remediation/verification.js';
 import { AppError } from '../lib/errors.js';
 
 /**
@@ -34,7 +37,12 @@ const FORBIDDEN_REQUEST_FIELDS = [
   'desiredState',
 ];
 
-export const PLAN_STATUSES = ['proposed', 'approved', 'executed', 'verified', 'failed'];
+// 'executing' is transient and exists so a second request can be refused rather than
+// racing the first one.
+export const PLAN_STATUSES = ['proposed', 'approved', 'executing', 'executed', 'verified', 'failed'];
+
+/** Plan ids currently mid-execution in this process. */
+const inFlight = new Set();
 
 function assertRequestShape(body = {}) {
   const smuggled = FORBIDDEN_REQUEST_FIELDS.filter((field) => body[field] !== undefined);
@@ -332,4 +340,191 @@ export async function approveRemediationPlan(id, { approvedBy = 'dashboard-user'
   }));
 }
 
-export default { createRemediationPlans, getRemediationPlans, getRemediationPlan, approveRemediationPlan };
+/**
+ * Execute an approved plan.
+ *
+ * Every safety check from planning is re-run here against freshly discovered AWS state.
+ * A plan approved ten minutes ago is not evidence that its target is still a lab
+ * resource, still exists, or still carries the tags - so none of that is assumed.
+ *
+ * The plan is the only source of truth for what runs. The request carries an id and
+ * nothing else: no operation name, no parameters.
+ */
+export async function executeRemediationPlan(id) {
+  const plan = await getPlan(id);
+  if (!plan) return null;
+
+  // --- idempotency: already done
+  if (plan.status === 'verified') {
+    return {
+      plan,
+      executed: false,
+      outcome: 'already_verified',
+      message: 'This remediation is already verified. It was not executed again.',
+    };
+  }
+
+  // --- idempotency: concurrent request
+  if (inFlight.has(id) || plan.status === 'executing') {
+    throw new AppError('This remediation is already executing.', {
+      status: 409,
+      code: 'execution_in_progress',
+      details: { planId: id },
+    });
+  }
+
+  if (plan.status !== 'approved') {
+    throw new AppError(`Only an approved plan can be executed; this plan is ${plan.status}.`, {
+      status: 409,
+      code: 'not_approved',
+      details: { currentStatus: plan.status },
+    });
+  }
+
+  if (!plan.executable) {
+    throw new AppError('This plan is not executable.', {
+      status: 409,
+      code: 'not_executable',
+      details: { planType: plan.planType },
+    });
+  }
+
+  inFlight.add(id);
+  const startedAt = new Date().toISOString();
+
+  try {
+    await updatePlan(id, (current) => ({ ...current, status: 'executing', executionStartedAt: startedAt }));
+
+    // --- re-verify the target against AWS as it is now, not as it was at planning time
+    const inventory = await discoverResources();
+    const resource = (inventory.services ?? [])
+      .filter((entry) => entry.status !== 'failed')
+      .flatMap((entry) => entry.resources ?? [])
+      .find((candidate) => candidate.id === plan.resourceId);
+
+    const recheck = evaluateSafety({
+      resource,
+      actionType: plan.actionType,
+      parameters: plan.parameters,
+      reversible: Boolean(plan.rollbackAction),
+    });
+
+    if (!recheck.safe) {
+      return await failPlan(id, {
+        stage: 'pre-execution-revalidation',
+        outcome: 'rejected',
+        message: `Safety re-validation failed at execution time: ${recheck.failedChecks.join(', ')}`,
+        checks: recheck.checks,
+        awsChangeAttempted: false,
+      });
+    }
+
+    const executor = executorFor(plan.actionType);
+    if (!executor) {
+      return await failPlan(id, {
+        stage: 'executor-lookup',
+        outcome: 'rejected',
+        message: `No executor is registered for action type ${plan.actionType}.`,
+        awsChangeAttempted: false,
+      });
+    }
+
+    const targetName = plan.parameters.FunctionName ?? plan.parameters.logGroupName ?? resource.name;
+
+    // --- before state, read from AWS
+    const beforeState = await captureStateFor(plan.service, targetName);
+
+    // --- idempotency: the desired state is already present
+    const alreadyThere = compareState(beforeState, plan.desiredState);
+    if (alreadyThere.matches) {
+      const verification = await verifyRemediation({ plan, targetName });
+      const settled = await updatePlan(id, (current) => ({
+        ...current,
+        status: verification.verified ? 'verified' : 'executed',
+        executionStartedAt: startedAt,
+        executedAt: new Date().toISOString(),
+        beforeState,
+        afterState: beforeState,
+        execution: {
+          awsChangeMade: false,
+          reason: 'The resource already held the desired configuration, so no AWS change was made.',
+        },
+        verification,
+      }));
+      return {
+        plan: settled,
+        executed: false,
+        outcome: 'already_in_desired_state',
+        message: 'The resource already held the desired configuration. No AWS change was made.',
+      };
+    }
+
+    // --- the AWS change
+    let executionResult;
+    try {
+      executionResult = await executor(plan.parameters);
+    } catch (error) {
+      const described = describeAwsError(error);
+      return await failPlan(id, {
+        stage: 'aws-execution',
+        outcome: 'aws_error',
+        message: `The AWS operation failed: ${described.message}`,
+        awsError: described,
+        // The call was made, so the change may or may not have landed; the after state
+        // below is what settles it.
+        awsChangeAttempted: true,
+        beforeState,
+        afterState: await captureStateFor(plan.service, targetName).catch(() => null),
+      });
+    }
+
+    const afterState = await captureStateFor(plan.service, targetName);
+    const verification = await verifyRemediation({ plan, targetName });
+
+    const settled = await updatePlan(id, (current) => ({
+      ...current,
+      status: verification.verified ? 'verified' : 'failed',
+      outcome: verification.verified ? 'verified' : 'verification_failed',
+      executionStartedAt: startedAt,
+      executedAt: new Date().toISOString(),
+      beforeState,
+      afterState,
+      execution: { awsChangeMade: true, ...executionResult },
+      verification,
+      ...(verification.verified ? {} : { failureReason: verification.conclusion }),
+    }));
+
+    return {
+      plan: settled,
+      executed: true,
+      outcome: verification.verified ? 'verified' : 'verification_failed',
+      message: verification.conclusion,
+    };
+  } finally {
+    inFlight.delete(id);
+  }
+}
+
+/** Records a failure on the plan and returns the same shape a success returns. */
+async function failPlan(id, failure) {
+  const settled = await updatePlan(id, (current) => ({
+    ...current,
+    status: 'failed',
+    outcome: failure.outcome,
+    executedAt: new Date().toISOString(),
+    failureReason: failure.message,
+    failure,
+    ...(failure.beforeState ? { beforeState: failure.beforeState } : {}),
+    ...(failure.afterState ? { afterState: failure.afterState } : {}),
+    execution: { awsChangeMade: Boolean(failure.awsChangeAttempted) },
+  }));
+  return { plan: settled, executed: false, outcome: failure.outcome, message: failure.message };
+}
+
+export default {
+  createRemediationPlans,
+  getRemediationPlans,
+  getRemediationPlan,
+  approveRemediationPlan,
+  executeRemediationPlan,
+};

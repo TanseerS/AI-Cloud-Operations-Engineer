@@ -15,8 +15,9 @@ reliability problems, and proposes or applies fixes.
 | CloudWatch health & issue detection | Done |
 | Bedrock AI analysis | Done |
 | Remediation planning & approval | Done |
+| Remediation execution & verification | Done |
 | Reset mechanism | Not started |
-| Remediation execution & lab reset | Not started |
+| Lab reset mechanism | Not started |
 | Detection / remediation agent | Not started |
 
 The application discovers the real AWS lab inventory end to end. The remaining analysis
@@ -97,6 +98,7 @@ Base path `/api/v1`. Only health is implemented.
 | POST | `/api/v1/ai/analyze` | Available - Bedrock analysis |
 | POST | `/api/v1/remediation/plan` | Available - builds plans (no execution) |
 | POST | `/api/v1/remediation/plans/:id/approve` | Available - state change only |
+| POST | `/api/v1/remediation/plans/:id/execute` | Available - applies and verifies |
 | POST | `/api/v1/lab/reset` | 501 |
 
 ```console
@@ -163,6 +165,14 @@ The caller cannot name a target: every resource, action and parameter is re-deri
 AWS by the backend, and only allowlisted actions against correctly tagged lab resources
 become executable plans. Approval marks a plan ready; it executes nothing. See
 [docs/remediation-planning.md](docs/remediation-planning.md).
+
+## Remediation execution
+
+`POST /api/v1/remediation/plans/:id/execute` applies an approved plan and verifies it.
+Every mutating AWS command in the codebase lives in one file, in three named functions —
+there is no generic command dispatcher. Verification reads the resource back from AWS and
+re-runs the detector; a successful API response is never treated as success on its own.
+See [docs/remediation-execution.md](docs/remediation-execution.md).
 
 ## The lab
 

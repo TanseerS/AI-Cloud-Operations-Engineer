@@ -6,6 +6,7 @@ import Button from '../ui/Button.jsx';
 import Icon from '../ui/Icon.jsx';
 import StatusIndicator from '../ui/StatusIndicator.jsx';
 import StateDiff from './StateDiff.jsx';
+import ExecutionResult from './ExecutionResult.jsx';
 import { SEVERITY_TONE } from '../health/severity.js';
 import { formatValue, humanizeKey } from '../../lib/format.js';
 
@@ -14,18 +15,21 @@ const RISK_TONE = { low: 'success', medium: 'warning', high: 'danger' };
 const STATUS_PRESENTATION = {
   proposed: { tone: 'info', label: 'Awaiting approval' },
   approved: { tone: 'success', label: 'Approved — ready for execution' },
-  executed: { tone: 'info', label: 'Executed' },
-  verified: { tone: 'success', label: 'Verified' },
+  executing: { tone: 'warning', label: 'Executing' },
+  executed: { tone: 'warning', label: 'Applied, not verified' },
+  verified: { tone: 'success', label: 'Verified — issue resolved' },
   failed: { tone: 'danger', label: 'Failed' },
 };
 
-export function PlanCard({ plan, onApprove, approving }) {
+export function PlanCard({ plan, onApprove, onExecute, approving, executing }) {
   const [expanded, setExpanded] = useState(false);
   const detailsId = useId();
 
   const severityTone = SEVERITY_TONE[plan.severity] ?? 'neutral';
   const status = STATUS_PRESENTATION[plan.status] ?? { tone: 'neutral', label: plan.status };
   const isApproved = plan.status === 'approved';
+  const isTerminal = ['verified', 'executed', 'failed'].includes(plan.status);
+  const hasRun = Boolean(plan.execution || plan.beforeState);
 
   return (
     <article className={`plan plan--${severityTone}${isApproved ? ' plan--approved' : ''}`}>
@@ -46,7 +50,11 @@ export function PlanCard({ plan, onApprove, approving }) {
       </header>
 
       <div className="plan__body">
-        <StateDiff currentState={plan.currentState} desiredState={plan.desiredState} />
+        {hasRun ? (
+          <ExecutionResult plan={plan} />
+        ) : (
+          <StateDiff currentState={plan.currentState} desiredState={plan.desiredState} />
+        )}
         <p className="plan__rationale">{plan.rationale}</p>
 
         {plan.warnings?.length ? (
@@ -61,14 +69,30 @@ export function PlanCard({ plan, onApprove, approving }) {
       </div>
 
       <div className="plan__actions">
-        <Button
-          variant={isApproved ? 'default' : 'primary'}
-          onClick={() => onApprove(plan.id)}
-          disabled={isApproved || approving}
-        >
-          <Icon name={isApproved ? 'activity' : 'remediation'} size={14} />
-          {isApproved ? 'Approved' : approving ? 'Approving' : 'Approve fix'}
-        </Button>
+        {!isTerminal ? (
+          <Button
+            variant={isApproved ? 'default' : 'primary'}
+            onClick={() => onApprove(plan.id)}
+            disabled={isApproved || approving}
+          >
+            <Icon name={isApproved ? 'activity' : 'remediation'} size={14} />
+            {isApproved ? 'Approved' : approving ? 'Approving' : 'Approve fix'}
+          </Button>
+        ) : null}
+
+        {isApproved || plan.status === 'executing' ? (
+          <Button variant="primary" onClick={() => onExecute(plan.id)} disabled={executing}>
+            <Icon name="remediation" size={14} />
+            {executing ? 'Executing on AWS' : 'Execute fix'}
+          </Button>
+        ) : null}
+
+        {plan.status === 'failed' ? (
+          <Button onClick={() => onExecute(plan.id)} disabled={executing}>
+            <Icon name="refresh" size={14} />
+            {executing ? 'Retrying' : 'Retry'}
+          </Button>
+        ) : null}
         <Button
           variant="ghost"
           onClick={() => setExpanded((open) => !open)}
