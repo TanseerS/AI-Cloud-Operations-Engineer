@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 
-import PageHeader from '../components/layout/PageHeader.jsx';
+import Hero from '../components/layout/Hero.jsx';
 import Card, { CardBody, CardHeader } from '../components/ui/Card.jsx';
 import Button from '../components/ui/Button.jsx';
 import Icon from '../components/ui/Icon.jsx';
@@ -68,19 +68,26 @@ export function OverviewPage() {
 
   return (
     <>
-      <PageHeader
-        title="Operations overview"
-        subtitle="The state of the AWS lab environment: what exists, what it costs, what is wrong with it, and what is being done about it."
-        aside={
-          <>
-            {data ? <Freshness at={data.generatedAt} /> : null}
-            <Button onClick={reload} disabled={busy}>
-              <Icon name="refresh" size={14} />
-              {busy ? 'Refreshing' : 'Refresh'}
-            </Button>
-          </>
-        }
+      <Hero
+        region={data?.region}
+        resourceCount={data?.resources?.available ? data.resources.total : null}
+        issueCount={data?.health?.available ? data.health.totalIssues : null}
+        labLabel={data ? labState.label : null}
+        unavailable={!data}
       />
+
+      <div className="page-header page-header--compact">
+        <p className="page-header__eyebrow-note">
+          Every figure below is read from AWS when this page loads.
+        </p>
+        <div className="page-header__aside">
+          {data ? <Freshness at={data.generatedAt} /> : null}
+          <Button onClick={reload} disabled={busy}>
+            <Icon name="refresh" size={14} />
+            {busy ? 'Refreshing' : 'Refresh'}
+          </Button>
+        </div>
+      </div>
 
       {status === 'loading' ? (
         <>

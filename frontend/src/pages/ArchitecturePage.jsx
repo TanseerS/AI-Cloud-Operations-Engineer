@@ -44,6 +44,7 @@ export function ArchitecturePage() {
   return (
     <>
       <PageHeader
+        eyebrow="Topology"
         title="Architecture"
         subtitle="How the discovered AWS resources actually connect. Every line is derived from a field in the resources' own AWS configuration - nothing is inferred from naming."
         aside={

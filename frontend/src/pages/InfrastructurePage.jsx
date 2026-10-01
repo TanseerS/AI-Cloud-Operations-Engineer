@@ -67,6 +67,7 @@ export function InfrastructurePage() {
   return (
     <>
       <PageHeader
+        eyebrow="Inventory"
         title="Infrastructure"
         subtitle="Live inventory of the AWS resources belonging to this lab, read through the backend. The browser never holds AWS access."
         aside={aside}

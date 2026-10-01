@@ -87,6 +87,7 @@ export function CostPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Spend"
         title="Cost"
         subtitle="Account-wide AWS spend from Cost Explorer. Figures are the latest available billing data, not a live bill."
         aside={

@@ -35,6 +35,7 @@ export function IssuesPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Observed state"
         title="Health & issues"
         subtitle="Findings from CloudWatch metrics, CloudWatch Logs and the discovered configuration. Every finding cites the observations that produced it — no model is involved at this stage."
         aside={

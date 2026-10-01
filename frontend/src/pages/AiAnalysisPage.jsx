@@ -53,6 +53,7 @@ export function AiAnalysisPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Reasoning"
         title="AI analysis"
         subtitle="An AWS Cloud Operations Engineer persona on Amazon Bedrock reasons over the observations this application already collected. It is given no other data, and anything it names that we did not observe is rejected before you see it."
         aside={

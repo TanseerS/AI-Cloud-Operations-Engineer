@@ -29,6 +29,7 @@ export function LabControlPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Reproducibility"
         title="Lab control"
         subtitle="The environment is intentionally broken so the detection and remediation workflow has something real to work on. A scheduled AWS check restores that state when it drifts, and you can restore it yourself at any time."
         aside={data ? <Freshness at={new Date().toISOString()} label="Checked" /> : null}

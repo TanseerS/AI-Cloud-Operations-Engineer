@@ -92,6 +92,7 @@ export function RemediationPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Change control"
         title="Remediation"
         subtitle="Detected issues turned into single, reversible AWS changes. Every target is re-derived from AWS by the backend — the browser cannot name a resource or an action. Approving a plan marks it ready; it does not execute anything."
         aside={

@@ -373,6 +373,15 @@ docs/            Per-capability documentation, demo script, submission notes
 | [Lab reset](docs/lab-reset.md) · [Autonomous management](docs/autonomous-lab-management.md) | Reproducibility |
 | [Design system](docs/design-system.md) | Tokens, themes, components |
 
+## Credits
+
+The hero photograph is by [Aaron Burden](https://unsplash.com/photos/aDjOUryr3bs) on
+[Unsplash](https://unsplash.com), used under the Unsplash License and served from this
+application's own origin. Display type is [Poppins](https://fonts.google.com/specimen/Poppins);
+the eyebrow is [Lora](https://fonts.google.com/specimen/Lora) italic. The interface design
+follows a [concept study by Mitanshu Mishra](https://dribbble.com/shots/17325342-Concept-UI-UX-Design-for-Travel-Blog)
+— its palette, editorial type pairing and squared geometry, applied to an operations tool.
+
 ---
 
 Built for the AWS Builder Center **Zero to Shipped** hackathon.

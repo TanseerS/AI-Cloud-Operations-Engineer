@@ -15,10 +15,15 @@
 }
 
 .shell__content {
+  /* Declared as variables so a full-bleed child (the hero) can negate exactly this
+     padding at every breakpoint instead of repeating the numbers and drifting. */
+  --shell-pad-x: var(--space-8);
+  --shell-pad-top: var(--space-8);
+
   width: 100%;
   max-width: var(--layout-max);
   margin: 0 auto;
-  padding: var(--space-8) var(--space-8) var(--space-12);
+  padding: var(--shell-pad-top) var(--shell-pad-x) var(--space-12);
 }
 
 /* ---- Sidebar ---- */
@@ -571,7 +576,11 @@
   .topbar { padding: 0 var(--space-4); }
   .topbar .topbar__menu { display: inline-flex; }
 
-  .shell__content { padding: var(--space-6) var(--space-4) var(--space-10); }
+  .shell__content {
+    --shell-pad-x: var(--space-4);
+    --shell-pad-top: var(--space-6);
+    padding: var(--shell-pad-top) var(--shell-pad-x) var(--space-10);
+  }
 }
 
 @media (max-width: 640px) {
@@ -3058,4 +3067,257 @@ a.breakdown__linked:hover { color: var(--color-accent); border-color: var(--colo
 @media (max-width: 640px) {
   .summary-grid { grid-template-columns: 1fr; }
   .run__time { margin-left: 0; }
+}
+
+/* ==========================================================================
+   Editorial layer
+
+   The reference design's voice, applied over the existing structure: a heavy
+   geometric display face, an italic-serif eyebrow sitting on a hairline rule,
+   square corners, and one photographic hero on the page people arrive at.
+   Everything below the hero stays as dense as it was.
+   ========================================================================== */
+
+/* ---- Eyebrow: small italic serif over a hairline rule ---- */
+
+.eyebrow {
+  display: block;
+  margin: 0 0 var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border-strong);
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--text-sm);
+  letter-spacing: var(--tracking-eyebrow);
+  color: var(--color-text-secondary);
+}
+
+.eyebrow--on-image {
+  border-bottom-color: rgba(255, 255, 255, 0.45);
+  color: var(--color-on-image-muted);
+}
+
+/* ---- Display type ---- */
+
+.page-header__title,
+.section__title,
+.hero__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: var(--tracking-display);
+}
+
+.page-header__title {
+  font-size: var(--text-3xl);
+  line-height: var(--leading-display);
+}
+
+/* Figures read as display type too - they are the thing being looked at */
+.summary__value,
+.stat-tile__value,
+.headline__value,
+.hero__figure {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+/* ---- Hero ---- */
+
+.hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 460px;
+  /* Bleeds to the edges of the content column by negating the shell's own padding,
+     which it reads rather than restates - so no breakpoint can leave them disagreeing. */
+  margin: calc(var(--shell-pad-top) * -1) calc(var(--shell-pad-x) * -1) var(--space-10);
+  padding: var(--space-12) var(--shell-pad-x) var(--space-8);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.hero__image,
+.hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+}
+
+.hero__image {
+  background-image: url('/hero-clouds.jpg');
+  background-size: cover;
+  background-position: center 58%;
+  /* Pulled towards the palette so the photograph sits in the design rather than
+     beside it, and so white text has a predictable ground. */
+  filter: saturate(0.72) brightness(0.96);
+}
+
+.hero__scrim {
+  z-index: -1;
+  background: var(--image-scrim);
+}
+
+.hero__body { max-width: 46rem; }
+
+.hero__title {
+  margin: 0;
+  font-size: var(--text-4xl);
+  line-height: var(--leading-display);
+  color: var(--color-on-image);
+  text-wrap: balance;
+}
+
+.hero__lede {
+  margin: var(--space-5) 0 0;
+  max-width: 44rem;
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+  color: var(--color-on-image-muted);
+}
+
+/* The floating card, as in the reference: one wide cell, two figures, one dark action */
+.hero__card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) repeat(2, minmax(104px, 0.5fr)) minmax(190px, 0.9fr);
+  margin-top: var(--space-10);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lift);
+}
+
+.hero__cell {
+  padding: var(--space-5) var(--space-5) var(--space-5);
+  border-left: 1px solid var(--color-border);
+}
+
+.hero__cell:first-child { border-left: 0; }
+
+.hero__cell--primary { padding-right: var(--space-8); }
+
+.hero__cell-text {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-secondary);
+}
+
+.hero__cell--figure { background: var(--color-editorial-tint); }
+
+.hero__figure-label {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-muted);
+}
+
+.hero__figure {
+  margin: 0;
+  font-size: var(--text-2xl);
+  line-height: 1;
+  color: var(--color-text);
+}
+
+/* The dark slate action cell - the reference's "Next" */
+.hero__cell--action {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-4);
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
+  text-decoration: none;
+  transition: background var(--transition-base);
+}
+
+.hero__cell--action:hover,
+.hero__cell--action:focus-visible { background: var(--color-accent-hover); }
+
+.hero__action-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  opacity: 0.78;
+}
+
+.hero__action-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: var(--text-md);
+}
+
+/* In dark mode the accent is the pale blue, so the action cell needs dark ink */
+:root[data-theme='dark'] .hero__cell--action,
+:root[data-theme='dark'] .hero__cell--action:hover { color: #0c161c; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hero__cell--action,
+  :root:not([data-theme='light']) .hero__cell--action:hover { color: #0c161c; }
+}
+
+@media (max-width: 1100px) {
+  .hero__card { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .hero__cell { border-top: 1px solid var(--color-border); }
+  .hero__cell:nth-child(-n + 2) { border-top: 0; }
+  .hero__cell:nth-child(odd) { border-left: 0; }
+  .hero__cell--primary { grid-column: 1 / -1; padding-right: var(--space-5); }
+}
+
+@media (max-width: 720px) {
+  .hero {
+    min-height: 0;
+    margin-bottom: var(--space-8);
+    padding-top: var(--space-10);
+    padding-bottom: var(--space-5);
+  }
+  .hero__title { font-size: var(--text-2xl); }
+  .hero__lede { font-size: var(--text-base); }
+  .hero__card { grid-template-columns: minmax(0, 1fr); margin-top: var(--space-8); }
+  .hero__cell { border-left: 0; border-top: 1px solid var(--color-border); }
+  .hero__cell:first-child { border-top: 0; }
+}
+
+/* ---- Reduced motion / reduced data courtesies ---- */
+
+@media (prefers-reduced-transparency: reduce) {
+  .hero__scrim { background: rgba(18, 38, 50, 0.6); }
+}
+
+/* The hero carries the page title, so what follows it is a thin context strip */
+.page-header--compact {
+  align-items: center;
+  margin-bottom: var(--space-6);
+}
+
+.page-header__eyebrow-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* A measured rule: long enough to read as a rule, short enough not to split the page */
+.eyebrow--measured {
+  width: max-content;
+  min-width: 13rem;
+  max-width: 100%;
+  padding-right: var(--space-12);
+}
+
+.page-header__lead { min-width: 0; }
+
+/* The figure cells need to separate from the card they sit in, which the pale tint
+   alone does not do once the surface is already dark. Light mode keeps the tint. */
+:root[data-theme='dark'] .hero__cell--figure {
+  background: var(--color-surface-sunken);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hero__cell--figure {
+    background: var(--color-surface-sunken);
+  }
 }

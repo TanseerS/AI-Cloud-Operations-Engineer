@@ -7,7 +7,8 @@
 #   python3 -c "import re,hashlib,base64,pathlib;b=re.search(r'<script>(.*?)</script>',pathlib.Path('frontend/dist/index.html').read_text(),re.S).group(1);print('sha256-'+base64.b64encode(hashlib.sha256(b.encode()).digest()).decode())"
 #
 # connect-src names the API Gateway endpoint explicitly, so the page cannot be made to
-# talk to any other host.
+# talk to any other host. style-src and font-src admit Google Fonts and nothing else -
+# the two display faces are served from there; every other asset is self-hosted.
 customHeaders:
   - pattern: '**'
     headers:
@@ -20,4 +21,4 @@ customHeaders:
       - key: Referrer-Policy
         value: strict-origin-when-cross-origin
       - key: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self' 'sha256-CHFEJy3l1N7qTndHCFtIvSQhpz04JtPuTrBiHszWYtE='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://fo7occiuh3.execute-api.us-east-1.amazonaws.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+        value: "default-src 'self'; script-src 'self' 'sha256-CHFEJy3l1N7qTndHCFtIvSQhpz04JtPuTrBiHszWYtE='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://fo7occiuh3.execute-api.us-east-1.amazonaws.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
