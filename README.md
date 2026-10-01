@@ -373,6 +373,7 @@ docs/            Per-capability documentation, demo script, submission notes
 | [Lab reset](docs/lab-reset.md) · [Autonomous management](docs/autonomous-lab-management.md) | Reproducibility |
 | [Design system](docs/design-system.md) | Tokens, themes, components |
 | [Connecting an AI coding agent to AWS](docs/connecting-an-ai-coding-agent-to-aws.pdf) | Setup and verification of the AWS Agent Toolkit (PDF) |
+| [The making of AICOE](docs/aicoe-making.pdf) | Full build log, task by task, with validation evidence (PDF) |
 
 ## Credits
 
