@@ -155,7 +155,7 @@ export function ArchitecturePage() {
               value={summary.resourcesRequiringAttention}
               hint={
                 summary.resourcesRequiringAttention === 0
-                  ? 'From resource state; issue analysis comes later'
+                  ? 'AWS reports no resource in a failed state. Detected findings are overlaid on the map below.'
                   : summary.attentionResources.map((entry) => entry.name).join(', ')
               }
             />

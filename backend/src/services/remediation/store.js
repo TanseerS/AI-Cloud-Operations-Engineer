@@ -2,35 +2,34 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
+import config from '../../config/index.js';
+import * as dynamo from './store-dynamodb.js';
+
 /**
  * Plan storage.
  *
- * A JSON file on the backend's own disk, not a database and not AWS. Plans are small,
- * few, and only ever read by this process, so a table would be infrastructure without a
- * reason. Writing them to AWS would also mean this planning stage modified the account,
- * which it must not.
+ * A plan is the audit record: what was proposed, who approved it, what AWS reported
+ * before and after, and whether verification passed. It has to outlive the process that
+ * made it, which is why the backing store is chosen by environment rather than fixed:
  *
- * Writes are serialised through a promise chain and go via a temporary file, so a crash
- * mid-write cannot leave a half-written plan file behind.
+ *   deployed - DynamoDB. Lambda containers are recycled, and a plan held on a container's
+ *              own disk disappears with it. A fix could then be applied and verified and
+ *              still show as awaiting approval on the next request, which is worse than
+ *              useless in an audit trail.
+ *   local    - a JSON file beside the code, so development needs no AWS resource at all.
+ *
+ * Either way the merge rules below are the same, and they are the part that matters:
+ * re-planning refreshes a proposed plan but can never rewrite one that has been approved.
  */
+const DATA_DIR = path.resolve(config.remediation.storeDir || path.join(process.cwd(), '.data'));
+const STORE_PATH = path.join(DATA_DIR, 'remediation-plans.json');
+const USE_DYNAMODB = Boolean(config.remediation.tableName);
 
 /**
- * Where plans live.
- *
- * Locally this is a file beside the code. On Lambda the deployment package is read-only,
- * so REMEDIATION_STORE_DIR points at /tmp - writable, and shared by every invocation on
- * the same container.
- *
- * The trade-off is stated rather than hidden: /tmp does not survive a cold start, so an
- * approval can be lost if a container is recycled between approving and executing. The
- * plan is rebuilt from the current issues in that case, and nothing unsafe happens - the
- * execution path re-validates everything against AWS regardless. Making approvals durable
- * means a real store (DynamoDB, or SSM Advanced tier since the largest plan is ~7 KB),
- * which is a cost this demo does not need to carry.
+ * The file store is the only writer of its file, so it may cache. The table is shared by
+ * every container, so caching there would reintroduce exactly the staleness the table
+ * exists to remove - and at a handful of small items, reading every time is free.
  */
-const DATA_DIR = path.resolve(process.env.REMEDIATION_STORE_DIR || path.join(process.cwd(), '.data'));
-const STORE_PATH = path.join(DATA_DIR, 'remediation-plans.json');
-
 let cache = null;
 let writeChain = Promise.resolve();
 
@@ -40,6 +39,7 @@ function hasDrifted(existing, recomputed) {
 }
 
 async function readAll() {
+  if (USE_DYNAMODB) return dynamo.readAll();
   if (cache) return cache;
   try {
     const raw = await fs.readFile(STORE_PATH, 'utf8');
@@ -57,6 +57,7 @@ async function readAll() {
 }
 
 function persist(plans) {
+  if (USE_DYNAMODB) return dynamo.persist(plans);
   writeChain = writeChain.then(async () => {
     await fs.mkdir(DATA_DIR, { recursive: true });
     const temporary = `${STORE_PATH}.tmp`;
@@ -93,7 +94,7 @@ export async function upsertPlans(incoming) {
     }
     plans[index] = { ...plan, createdAt: existing.createdAt };
   }
-  cache = plans;
+  if (!USE_DYNAMODB) cache = plans;
   await persist(plans);
   return plans;
 }
@@ -103,14 +104,21 @@ export async function updatePlan(id, mutate) {
   const index = plans.findIndex((plan) => plan.id === id);
   if (index === -1) return null;
   plans[index] = mutate({ ...plans[index] });
-  cache = plans;
+  if (!USE_DYNAMODB) cache = plans;
   await persist(plans);
   return plans[index];
 }
 
 export async function clearPlans() {
-  cache = [];
+  if (!USE_DYNAMODB) cache = [];
   await persist([]);
+}
+
+/** Where plans are actually being kept, for the API to report honestly. */
+export function describeStore() {
+  return USE_DYNAMODB
+    ? dynamo.describeBackend()
+    : { backend: 'file', path: STORE_PATH, durable: false };
 }
 
 export { STORE_PATH };

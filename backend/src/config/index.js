@@ -86,6 +86,18 @@ export const config = Object.freeze({
     cacheTtlSeconds: readPort('BEDROCK_CACHE_TTL_SECONDS', 600),
     minIntervalSeconds: readPort('BEDROCK_MIN_INTERVAL_SECONDS', 20),
   },
+  remediation: {
+    // Where approved plans live.
+    //
+    // A DynamoDB table when one is named, which is what deployment does: a plan carries
+    // the approval record and the verification result, and on Lambda those cannot live on
+    // a container's own disk without being lost when the container is recycled.
+    //
+    // With no table named - local development - plans fall back to a JSON file, so the
+    // app runs with no AWS dependency for storage.
+    tableName: readString('REMEDIATION_TABLE_NAME', ''),
+    storeDir: readString('REMEDIATION_STORE_DIR', ''),
+  },
   automation: {
     // The scheduled lab check. Interval lives here rather than in the deploy script, so
     // the schedule and anything that reports on it read the same number.

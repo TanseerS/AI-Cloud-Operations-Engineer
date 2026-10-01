@@ -175,9 +175,55 @@ export function CostPage() {
           <HeadlineCost data={data} />
 
           {!hasSpend ? (
-            <Callout tone="info" title="No billable usage recorded in this period">
-              Cost Explorer returned data, but every charge in {data.periods.current.label} is zero.
-            </Callout>
+            <>
+              <Callout tone="info" title="No billable usage recorded in this period">
+                Cost Explorer returned data, but every charge in {data.periods.current.label} is
+                zero. AWS finalises charges over roughly a day, so a month this new often has
+                nothing posted against it yet.
+              </Callout>
+
+              {data.trailing?.available ? (
+                <section className="section">
+                  <div className="section__header">
+                    <h2 className="section__title">Trailing {data.trailing.period.days} days</h2>
+                    <p className="section__hint">
+                      The same billing data over a window that has charges in it, so the shape of
+                      the spend is still visible. The figures above remain month-to-date.
+                    </p>
+                  </div>
+
+                  <TopDrivers
+                    drivers={data.trailing.topDrivers}
+                    currency={data.currency}
+                    total={data.trailing.total}
+                  />
+
+                  <div className="two-column two-column--wide" style={{ marginTop: 'var(--space-4)' }}>
+                    <Card>
+                      <CardHeader
+                        title="Daily cost trend"
+                        description={`Usage cost per day across the ${data.trailing.period.days} days to ${data.trailing.period.end}`}
+                        actions={<Badge tone="outline">{data.currency}</Badge>}
+                      />
+                      <CardBody>
+                        <TrendChart data={data.trailing.daily} currency={data.currency} />
+                      </CardBody>
+                    </Card>
+
+                    <Card>
+                      <CardHeader
+                        title="Cost by service"
+                        description={`${data.trailing.services.length} services with charges in this window. A tagged service links to the resources billed under it — a name correspondence, not a claim about which one caused the charge.`}
+                        actions={<Badge tone="outline">AWS billing data</Badge>}
+                      />
+                      <CardBody>
+                        <ServiceBreakdown services={data.trailing.services} currency={data.currency} />
+                      </CardBody>
+                    </Card>
+                  </div>
+                </section>
+              ) : null}
+            </>
           ) : (
             <>
               <section className="section">

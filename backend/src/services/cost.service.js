@@ -1,5 +1,5 @@
 import { describeAwsError } from './aws/clients.js';
-import { buildPeriods } from './cost/periods.js';
+import { buildPeriods, buildTrailingPeriod } from './cost/periods.js';
 import { billingServiceKey, discoveryServiceFor } from './cost/service-mapping.js';
 import {
   BILLING_REGION,
@@ -89,6 +89,39 @@ function foldServiceTotals(results) {
     }
   }
   return totals;
+}
+
+/**
+ * Turns a daily-by-service result set into the same shape the current period uses, so
+ * the frontend can render a trailing window with the components it already has.
+ */
+function shapeWindow(results, period) {
+  const { perService, daily, estimatedDays } = foldDailyByService(results);
+  const total = [...perService.values()].reduce((sum, value) => sum + value, 0);
+
+  const services = [...perService.entries()]
+    .map(([name, cost]) => ({
+      service: name,
+      serviceKey: billingServiceKey(name),
+      discoveryService: discoveryServiceFor(name),
+      cost: round(cost),
+      percentage: total > 0 ? round((cost / total) * 100, 2) : 0,
+      previousCost: null,
+      change: null,
+      changePercent: null,
+    }))
+    .filter((entry) => entry.cost !== 0)
+    .sort((a, b) => b.cost - a.cost);
+
+  return {
+    available: total > 0,
+    period,
+    total: round(total),
+    estimatedDays,
+    daily,
+    services,
+    topDrivers: services.slice(0, 4),
+  };
 }
 
 function buildComparison(currentTotal, previousTotal, previousPeriod) {
@@ -210,6 +243,25 @@ export async function getCostAnalysis({ force = false } = {}) {
 
   const lastCompleteDay = [...daily].reverse().find((day) => day.cost > 0)?.date ?? null;
 
+  // Early in a month AWS may not have posted anything yet. The headline stays truthful -
+  // month-to-date really is zero - but one extra query gives the trend and the service
+  // breakdown real data to show instead of an empty panel. Only runs when it is needed,
+  // so it costs nothing on a normal day.
+  let trailing = { available: false, reason: 'The current period has charges of its own.' };
+  if (usageTotal === 0) {
+    const trailingPeriod = buildTrailingPeriod(30);
+    try {
+      trailing = shapeWindow(await getDailyCostByService(counter, trailingPeriod), trailingPeriod);
+      if (!trailing.available) {
+        trailing = { available: false, period: trailingPeriod, reason: 'No charges in the last 30 days either.' };
+      }
+    } catch (error) {
+      const described = describeAwsError(error);
+      errors.push({ query: 'trailing-window', ...described });
+      trailing = { available: false, period: trailingPeriod, reason: described.message };
+    }
+  }
+
   // Warnings describe this specific response, not billing in the abstract.
   warnings.push({
     level: 'info',
@@ -257,6 +309,8 @@ export async function getCostAnalysis({ force = false } = {}) {
     daily,
     services,
     topDrivers: services.filter((entry) => entry.cost > 0).slice(0, 4),
+    // Present only when the current period is empty; see above.
+    trailing,
     warnings,
     errors,
     partial: errors.length > 0,

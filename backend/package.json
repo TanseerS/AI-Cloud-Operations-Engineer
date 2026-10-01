@@ -11,6 +11,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "test": "node --test \"test/*.test.js\"",
     "build:lambda": "esbuild src/lambda/autonomous-lab-manager.js --bundle --platform=node --target=node20 --format=esm --external:@aws-sdk/* --banner:js=\"import{createRequire as __cr}from'module';const require=__cr(import.meta.url);\" --outfile=../build/lambda/index.mjs",
     "build:api": "esbuild src/lambda/api.js --bundle --platform=node --target=node20 --format=esm --external:@aws-sdk/* --banner:js=\"import{createRequire as __cr}from'module';const require=__cr(import.meta.url);\" --outfile=../build/api/index.mjs"
   },
@@ -20,10 +21,12 @@
     "@aws-sdk/client-cloudwatch": "^3.1143.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.1143.0",
     "@aws-sdk/client-cost-explorer": "^3.1143.0",
+    "@aws-sdk/client-dynamodb": "^3.1144.0",
     "@aws-sdk/client-iam": "^3.1143.0",
     "@aws-sdk/client-lambda": "^3.1143.0",
     "@aws-sdk/client-resource-groups-tagging-api": "^3.1143.0",
     "@aws-sdk/client-ssm": "^3.1143.0",
+    "@aws-sdk/lib-dynamodb": "^3.1144.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",

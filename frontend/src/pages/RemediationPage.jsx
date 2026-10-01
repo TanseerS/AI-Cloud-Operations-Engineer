@@ -119,7 +119,7 @@ export function RemediationPage() {
           <code>ManagedBy=aicoe</code> in{' '}
           <code>{guardrails?.region ?? stored.data?.region ?? 'us-east-1'}</code>
         </span>
-        <Badge tone="success">no execution in this stage</Badge>
+        <Badge tone="success">execution requires explicit approval</Badge>
       </div>
 
       {executingId ? (

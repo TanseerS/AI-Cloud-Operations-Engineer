@@ -51,4 +51,27 @@ export function buildPeriods(now = new Date()) {
   };
 }
 
+/**
+ * A trailing window ending today.
+ *
+ * On the first days of a month the current period can legitimately hold no charges at
+ * all, because AWS has not finalised anything yet. The month-to-date figure stays what
+ * it is - zero is the honest answer - but a trend with no days in it tells the reader
+ * nothing, so this window gives the charts something real to draw while the headline
+ * keeps reporting the month.
+ */
+export function buildTrailingPeriod(days = 30, now = new Date()) {
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const end = addDays(today, 1); // exclusive
+  const start = addDays(end, -days);
+
+  return {
+    label: `last ${days} days`,
+    start: toIso(start),
+    end: toIso(end),
+    days,
+    partialMonth: false,
+  };
+}
+
 export default buildPeriods;

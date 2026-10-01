@@ -93,10 +93,19 @@ next. A later run records `supersededBy` noting whether a fresh computation woul
 
 ## Storage
 
-A JSON file on the backend's own disk (`backend/.data/`, gitignored), written through a
-temporary file so a crash cannot leave a half-written store. Not a database: plans are
-small and few. Not AWS: writing them there would mean this planning stage modified the
-account, which it must not.
+A plan is the audit record, so where it lives is chosen by environment rather than fixed.
+
+**Deployed:** a DynamoDB table, `aicoe-remediation-plans`, keyed by plan id. Lambda
+containers are recycled, and a plan held on a container's own disk disappears with it —
+which showed up as an applied, verified fix still reading as *awaiting approval* on a
+request served by another container. Nothing unsafe followed, since execution re-validates
+against AWS regardless, but an audit trail that forgets is not an audit trail.
+
+**Local:** a JSON file (`backend/.data/`, gitignored), written through a temporary file so
+a crash cannot leave a half-written store, so development needs no AWS resource.
+
+Either way the merge rules above are identical, and planning still writes nothing to the
+account it is analysing: the table holds this application's own records, not AWS config.
 
 The audit record holds the issue, the rule that detected it, the resource and how it was
 verified, current and proposed configuration, the reason, the evidence, whether Bedrock
