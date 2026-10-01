@@ -57,6 +57,10 @@ export function Sidebar({ open, onNavigate, region }) {
           <span className="sidebar__footer-key">Region</span>
           <span className="sidebar__footer-value mono">{region ?? '—'}</span>
         </div>
+        <div className="sidebar__footer-row">
+          <span className="sidebar__footer-key">Version</span>
+          <span className="sidebar__footer-value mono">v{config.version}</span>
+        </div>
       </div>
     </aside>
   );

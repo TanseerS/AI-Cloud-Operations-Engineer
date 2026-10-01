@@ -1,6 +1,5 @@
 {
   "name": "aicoe-frontend",
-  "version": "0.1.0",
   "private": true,
   "description": "Dashboard for the AI Cloud Operations Engineer",
   "type": "module",

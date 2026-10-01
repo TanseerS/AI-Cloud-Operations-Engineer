@@ -13,6 +13,8 @@ function trimTrailingSlash(value) {
 }
 
 export const config = Object.freeze({
+  // Injected by Vite from version.js at the repository root.
+  version: __APP_VERSION__,
   apiBaseUrl: trimTrailingSlash(import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL),
   appEnv: import.meta.env.VITE_APP_ENV || import.meta.env.MODE,
   isDev: import.meta.env.DEV,

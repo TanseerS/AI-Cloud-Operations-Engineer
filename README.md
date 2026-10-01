@@ -276,6 +276,13 @@ ever one of them** — the AWS SDK resolves credentials at call time from the pr
 
 Frontend: only `VITE_API_BASE_URL` and `VITE_APP_ENV`. Vite bundles only `VITE_`-prefixed values, and
 everything in that bundle is public by definition — which is exactly why no secret is ever named there.
+A production build with `VITE_API_BASE_URL` unset or non-HTTPS **fails**, rather than quietly shipping a
+bundle that points at localhost.
+
+**Version.** `version.js` at the repository root is the only place the version is written. The backend
+imports it into its config (and so into `/health`); Vite injects it into the bundle, where the sidebar
+shows it. Neither `package.json` carries a version field, so there is nowhere for a second number to
+disagree.
 
 ## Security considerations
 

@@ -130,7 +130,13 @@ cd dist && zip -qr ../../build/dist.zip .
 ```
 
 `VITE_API_BASE_URL` is set at build time, not committed, so the same source builds for any
-environment. Local development keeps its `http://localhost:4000/api/v1` default.
+environment. Local development keeps its `http://localhost:4000/api/v1` default — and a
+production build refuses to run unless the variable names an HTTPS endpoint, because a
+bundle pointing at localhost fails silently in the browser after it has been deployed.
+
+**Version.** `version.js` at the repository root is the single source. Vite injects it as
+`__APP_VERSION__` and the backend imports it into `config/index.js`, so the sidebar and
+`/health` always report the same release.
 
 **SPA routing.** `infrastructure/deployment/amplify-custom-rules.json` rewrites any path
 without a file extension to `/index.html` with status 200. Without it a refresh on

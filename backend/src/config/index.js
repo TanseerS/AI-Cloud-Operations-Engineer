@@ -11,6 +11,8 @@
 import process from 'node:process';
 import dotenv from 'dotenv';
 
+import { APP_VERSION } from '../../../version.js';
+
 dotenv.config();
 
 const ENVIRONMENTS = ['development', 'test', 'production'];
@@ -44,7 +46,7 @@ if (!ENVIRONMENTS.includes(environment)) {
 export const config = Object.freeze({
   service: {
     name: 'aicoe-api',
-    version: '0.1.0',
+    version: APP_VERSION,
     environment,
   },
   server: {
