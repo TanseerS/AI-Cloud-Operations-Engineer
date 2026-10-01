@@ -33,6 +33,13 @@ const USE_DYNAMODB = Boolean(config.remediation.tableName);
 let cache = null;
 let writeChain = Promise.resolve();
 
+/**
+ * Statuses a plan does not come back from on its own. Re-planning rebuilds these rather
+ * than freezing them: there is no approval left in flight to protect, and the issue being
+ * planned for is one AWS is reporting right now.
+ */
+const SETTLED_STATUSES = new Set(['verified', 'executed', 'failed']);
+
 /** Whether a fresh computation would produce a different change from the frozen one. */
 function hasDrifted(existing, recomputed) {
   return JSON.stringify(existing.parameters ?? null) !== JSON.stringify(recomputed.parameters ?? null);
@@ -85,13 +92,35 @@ export async function upsertPlans(incoming) {
       continue;
     }
     const existing = plans[index];
+
+    // A plan only reaches re-planning when its issue is being detected right now, because
+    // that is the only thing the planner builds from. So a settled plan that turns up here
+    // has been overtaken by reality - the fix it applied is no longer holding, or the lab
+    // was reset underneath it - and continuing to show it as verified would be a claim the
+    // environment contradicts. It goes back to proposed, carrying what it did last time.
+    if (SETTLED_STATUSES.has(existing.status)) {
+      plans[index] = {
+        ...plan,
+        createdAt: existing.createdAt,
+        previousOutcome: {
+          status: existing.status,
+          outcome: existing.outcome ?? null,
+          executedAt: existing.executedAt ?? null,
+          approvedBy: existing.approval?.approvedBy ?? null,
+          note: 'This issue was detected again after the plan settled, so the plan was rebuilt.',
+        },
+      };
+      continue;
+    }
+
     if (existing.status !== 'proposed') {
-      // Once approved, a plan is frozen. Re-planning must not be able to swap the
-      // parameters underneath an approval that was given for different ones - the
-      // approval refers to that exact change, not to whatever the rule computes next.
+      // An approval in flight is frozen. Re-planning must not swap the parameters
+      // underneath an approval that was given for different ones - the approval refers to
+      // that exact change, not to whatever the rule computes next.
       plans[index] = { ...existing, supersededBy: { recomputedAt: plan.createdAt, differs: hasDrifted(existing, plan) } };
       continue;
     }
+
     plans[index] = { ...plan, createdAt: existing.createdAt };
   }
   if (!USE_DYNAMODB) cache = plans;
