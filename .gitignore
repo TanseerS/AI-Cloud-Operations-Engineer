@@ -45,3 +45,8 @@ credentials
 
 # Local plan storage (not AWS, not a database)
 backend/.data/
+
+# Demo video intermediates - 185 capture frames, ~31MB, regenerable with
+# demo/scripts/capture3.mjs. The rendered video and the scripts that build it are
+# committed; the frames they were built from are not.
+demo/raw/
