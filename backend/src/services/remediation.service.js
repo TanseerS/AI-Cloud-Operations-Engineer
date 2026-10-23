@@ -170,6 +170,10 @@ function planFor({ issue, resource, aiFinding, createdAt }) {
 
   const plan = {
     ...base,
+    // The registry decides which state-capture contract this action uses, which is not
+    // always the service the issue was reported against: an alias rollback is detected
+    // on a Lambda function but acted on through the alias API.
+    service: registryEntry.service ?? base.service,
     planType: safety.safe ? 'executable' : 'blocked',
     executable: safety.safe,
     action: registryEntry.title,
@@ -183,6 +187,9 @@ function planFor({ issue, resource, aiFinding, createdAt }) {
     rationale: change.rationale,
     prerequisites: registryEntry.prerequisites,
     warnings: change.warnings ?? [],
+    // Present only for actions whose registry entry defines one; verification skips
+    // the probe entirely when it is absent, so existing actions are unaffected.
+    ...(change.probe ? { probe: change.probe } : {}),
     rollbackAction: {
       awsOperation: change.rollbackParameters?.operation ?? registryEntry.awsOperation,
       parameters: change.rollbackParameters,
@@ -432,7 +439,26 @@ export async function executeRemediationPlan(id) {
     const targetName = plan.parameters.FunctionName ?? plan.parameters.logGroupName ?? resource.name;
 
     // --- before state, read from AWS
-    const beforeState = await captureStateFor(plan.service, targetName);
+    const beforeState = await captureStateFor(plan.service, targetName, plan.parameters);
+
+    // --- an alias carries its own pre-mutation contract.
+    //
+    // The plan was approved against a specific version and a specific alias revision.
+    // If either moved in between - a reset ran, someone deployed, a second plan executed
+    // - then the change this plan describes is no longer the change that would happen,
+    // and the approval does not cover it. Fail closed rather than reconcile.
+    if (plan.service === 'lambda-alias') {
+      const drift = detectAliasDrift(beforeState, plan);
+      if (drift.length > 0) {
+        return await failPlan(id, {
+          stage: 'pre-execution-alias-revalidation',
+          outcome: 'rejected',
+          message: `The alias changed after approval, so the approved rollback was not applied: ${drift.join('; ')}`,
+          awsChangeAttempted: false,
+          beforeState,
+        });
+      }
+    }
 
     // --- idempotency: the desired state is already present
     const alreadyThere = compareState(beforeState, plan.desiredState);
@@ -474,11 +500,11 @@ export async function executeRemediationPlan(id) {
         // below is what settles it.
         awsChangeAttempted: true,
         beforeState,
-        afterState: await captureStateFor(plan.service, targetName).catch(() => null),
+        afterState: await captureStateFor(plan.service, targetName, plan.parameters).catch(() => null),
       });
     }
 
-    const afterState = await captureStateFor(plan.service, targetName);
+    const afterState = await captureStateFor(plan.service, targetName, plan.parameters);
     const verification = await verifyRemediation({ plan, targetName });
 
     const settled = await updatePlan(id, (current) => ({
@@ -503,6 +529,30 @@ export async function executeRemediationPlan(id) {
   } finally {
     inFlight.delete(id);
   }
+}
+
+/**
+ * Has the alias moved since this plan was approved?
+ *
+ * The approval was given for a specific change: this version, on this alias, at this
+ * revision. If any of those moved in between - a reset ran, someone deployed, another
+ * plan executed - then applying the plan now would be a different change from the one
+ * that was approved. Pure, and exported, so every branch is testable without AWS.
+ */
+export function detectAliasDrift(beforeState, plan) {
+  const drift = [];
+  if (beforeState?.FunctionVersion !== plan.currentState?.FunctionVersion) {
+    drift.push(
+      `alias now serves version ${beforeState?.FunctionVersion}, but the approved plan was built against ${plan.currentState?.FunctionVersion}`,
+    );
+  }
+  if (plan.parameters?.RevisionId && beforeState?.RevisionId !== plan.parameters.RevisionId) {
+    drift.push('the alias revision changed after this plan was approved');
+  }
+  if (beforeState?.AliasName !== plan.parameters?.Name) {
+    drift.push(`alias name mismatch: read ${beforeState?.AliasName}, expected ${plan.parameters?.Name}`);
+  }
+  return drift;
 }
 
 /** Records a failure on the plan and returns the same shape a success returns. */

@@ -2,6 +2,7 @@ import config from '../../config/index.js';
 import { LAB_TAG_KEY, LAB_TAG_VALUE, matchesNamingConvention } from '../aws/lab-filter.js';
 import {
   isAllowedActionType,
+  isPublishedVersion,
   ACTION_TYPES,
   ALLOWED_RETENTION_DAYS,
   LAMBDA_MEMORY_MIN_MB,
@@ -44,7 +45,11 @@ function checkTags(resource) {
   };
 }
 
-function checkParameters(actionType, parameters) {
+/**
+ * @param origin 'remediation' for a planned, human-approved change; 'reset' for the lab
+ *   restore engine. The difference matters for exactly one check - see RevisionId below.
+ */
+function checkParameters(actionType, parameters, origin) {
   const problems = [];
 
   switch (actionType) {
@@ -80,6 +85,37 @@ function checkParameters(actionType, parameters) {
       }
       break;
     }
+    case ACTION_TYPES.LAMBDA_ROLLBACK_ALIAS: {
+      // The function and alias are fixed by server configuration, not by the plan. A
+      // plan naming anything else is refused here even if every other check passed.
+      if (parameters.FunctionName !== config.lab.rollbackFunctionName) {
+        problems.push(
+          `FunctionName must be ${config.lab.rollbackFunctionName}; rollback is restricted to that one lab function`,
+        );
+      }
+      if (parameters.Name !== config.lab.rollbackAliasName) {
+        problems.push(`alias must be "${config.lab.rollbackAliasName}"`);
+      }
+      // $LATEST, a non-numeric label, or a missing version are all refused: a rollback
+      // targets a version that was explicitly published, never a moving pointer.
+      if (!isPublishedVersion(parameters.FunctionVersion)) {
+        problems.push(
+          `FunctionVersion ${JSON.stringify(parameters.FunctionVersion)} is not an explicitly published version`,
+        );
+      }
+      // Optimistic concurrency, required for a remediation and not for a reset.
+      //
+      // A remediation has a gap between a human approving a specific change and that
+      // change being applied, so it must prove the alias has not moved in between. A
+      // reset has no such gap: it is server-initiated, holds an exclusive in-flight
+      // lock, and writes a constant from the baseline rather than a value derived
+      // earlier. Requiring a token it cannot have would simply make reset skip the
+      // target - which is precisely what it did before this distinction existed.
+      if (origin !== 'reset' && (typeof parameters.RevisionId !== 'string' || parameters.RevisionId.length === 0)) {
+        problems.push('RevisionId observed at planning time is required, so a concurrent alias change cannot be overwritten');
+      }
+      break;
+    }
     case ACTION_TYPES.LOGS_UPDATE_RETENTION: {
       const value = parameters.retentionInDays;
       if (!ALLOWED_RETENTION_DAYS.includes(value)) {
@@ -103,7 +139,7 @@ function checkParameters(actionType, parameters) {
 /**
  * @param resource a resource object produced by discovery, never caller input
  */
-export function evaluateSafety({ resource, actionType, parameters, reversible }) {
+export function evaluateSafety({ resource, actionType, parameters, reversible, origin = 'remediation' }) {
   const checks = [];
 
   checks.push({
@@ -143,7 +179,7 @@ export function evaluateSafety({ resource, actionType, parameters, reversible })
     detail: isAllowedActionType(actionType) ? `${actionType} is allowlisted` : `${actionType} is not allowlisted`,
   });
 
-  checks.push(checkParameters(actionType, parameters ?? {}));
+  checks.push(checkParameters(actionType, parameters ?? {}, origin));
 
   checks.push({
     id: 'reversible',

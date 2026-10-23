@@ -1,0 +1,50 @@
+{
+    "issue_id": "aicoe-lab-issue-006",
+    "status": "active",
+    "category": "reliability",
+    "severity": "critical",
+    "title": "Alias 'live' serving a regressed published version",
+    "target": {
+        "type": "aws_lambda_alias",
+        "name": "aicoe-lab-rollback-function",
+        "function_name": "aicoe-lab-rollback-function",
+        "alias": "live",
+        "attribute": "FunctionVersion"
+    },
+    "intended_value": "1",
+    "broken_value": "2",
+    "known_good": {
+        "version": "1",
+        "release": "v1-known-good",
+        "probe_payload": {
+            "probe": true
+        },
+        "note": "Published Lambda versions are immutable, so version 1 cannot stop being the version that was validated. The application can only select among versions that already exist; it holds no permission to publish or delete one."
+    },
+    "description": "aicoe-lab-rollback-function has two published versions. Version 1 computes basket totals correctly. Version 2 is a regressed refactor that drops quantity from the calculation, fails its own invariant and raises on every invocation. Alias 'live' points at version 2, so every call through the alias fails with an Unhandled FunctionError and AWS/Lambda Errors equals Invocations.",
+    "detection": {
+        "primary": "CloudWatch AWS/Lambda Errors / Invocations for aicoe-lab-rollback-function exceeds 25% over the analysis window",
+        "secondary": "lambda:GetAlias reports FunctionVersion 2, which is not the known-good version recorded here",
+        "rule": "lambda-alias-serving-failing-version",
+        "signal": "both must hold: a measured error rate AND an alias serving a version other than the known-good one",
+        "note": "Traffic-dependent. With no recent invocations the Errors metric is unavailable and the rule correctly stays silent."
+    },
+    "remediation": {
+        "api": "lambda:UpdateAlias",
+        "parameters": {
+            "FunctionName": "aicoe-lab-rollback-function",
+            "Name": "live",
+            "FunctionVersion": "1"
+        },
+        "verification": "lambda:GetAlias reports FunctionVersion 1, the detector clears, and invoking aicoe-lab-rollback-function:live returns statusCode 200 with ok=true and release=v1-known-good"
+    },
+    "reset": {
+        "api": "lambda:UpdateAlias",
+        "parameters": {
+            "FunctionName": "aicoe-lab-rollback-function",
+            "Name": "live",
+            "FunctionVersion": "2"
+        },
+        "verification": "lambda:GetAlias reports FunctionVersion 2"
+    }
+}

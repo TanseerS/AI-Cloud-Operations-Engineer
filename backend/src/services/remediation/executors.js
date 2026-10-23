@@ -1,6 +1,9 @@
 import {
   UpdateFunctionConfigurationCommand,
   GetFunctionConfigurationCommand,
+  GetAliasCommand,
+  UpdateAliasCommand,
+  InvokeCommand,
 } from '@aws-sdk/client-lambda';
 import {
   PutRetentionPolicyCommand,
@@ -9,7 +12,7 @@ import {
 } from '@aws-sdk/client-cloudwatch-logs';
 
 import { getLambdaClient, getLogsClient } from '../aws/clients.js';
-import { ACTION_TYPES } from './registry.js';
+import { ACTION_TYPES, isPublishedVersion } from './registry.js';
 
 /**
  * The only code in this application that changes AWS.
@@ -93,12 +96,45 @@ export async function captureLogGroupState(logGroupName) {
   };
 }
 
-export async function captureStateFor(service, targetName) {
+/**
+ * An alias is an attribute of a function rather than a resource of its own, so the
+ * alias name travels alongside the function name rather than inside it.
+ */
+export async function captureLambdaAliasState(functionName, aliasName) {
+  if (typeof functionName !== 'string' || typeof aliasName !== 'string') {
+    throw new Error('captureLambdaAliasState requires a function name and an alias name');
+  }
+
+  const alias = await getLambdaClient().send(
+    new GetAliasCommand({ FunctionName: functionName, Name: aliasName }),
+  );
+  return {
+    source: 'lambda:GetAlias',
+    capturedAt: new Date().toISOString(),
+    FunctionName: functionName,
+    AliasName: alias.Name ?? null,
+    // A string in the Lambda API, and compared as one everywhere in this codebase.
+    FunctionVersion: alias.FunctionVersion ?? null,
+    // The optimistic-concurrency token. Captured so a later mutation can prove the
+    // alias has not moved since it was read.
+    RevisionId: alias.RevisionId ?? null,
+    AliasArn: alias.AliasArn ?? null,
+  };
+}
+
+/**
+ * @param parameters the plan's own parameters, for the services whose target needs more
+ *   than a single name. Never caller input: by this point the parameters came from the
+ *   registry or the lab baseline.
+ */
+export async function captureStateFor(service, targetName, parameters = {}) {
   switch (service) {
     case 'lambda':
       return captureLambdaState(targetName);
     case 'logs':
       return captureLogGroupState(targetName);
+    case 'lambda-alias':
+      return captureLambdaAliasState(targetName, parameters.Name);
     default:
       throw new Error(`No state capture defined for service "${service}"`);
   }
@@ -206,6 +242,106 @@ export async function applyLogRetentionFix({ logGroupName, retentionInDays, oper
 }
 
 /**
+ * lambda:rollback-alias - moves an alias between two already-published versions.
+ *
+ * It cannot publish a version and it cannot delete one: the only thing it changes is
+ * which existing version the alias resolves to. RevisionId makes that change
+ * conditional, so if the alias moved between approval and execution the call fails
+ * rather than silently overwriting whatever happened in between.
+ */
+export async function applyLambdaAliasRollback({ FunctionName, Name, FunctionVersion, RevisionId }) {
+  if (typeof FunctionName !== 'string' || typeof Name !== 'string') {
+    throw new Error('applyLambdaAliasRollback requires FunctionName and Name');
+  }
+  if (!isPublishedVersion(FunctionVersion)) {
+    throw new Error('applyLambdaAliasRollback requires an explicitly published version');
+  }
+
+  const response = await getLambdaClient().send(
+    new UpdateAliasCommand({
+      FunctionName,
+      Name,
+      FunctionVersion,
+      // Omitted only when the caller could not observe one; the safety gate requires it
+      // for a remediation, so in practice it is always present there.
+      ...(RevisionId ? { RevisionId } : {}),
+    }),
+  );
+
+  return {
+    awsOperation: 'lambda:UpdateAlias',
+    requested: { FunctionName, Name, FunctionVersion },
+    usedRevisionId: RevisionId ?? null,
+    acceptedRevisionId: response.RevisionId ?? null,
+    aliasArn: response.AliasArn ?? null,
+    settled: true,
+  };
+}
+
+/**
+ * The behaviour probe.
+ *
+ * Reading the alias back proves the pointer moved. It does not prove the code behind it
+ * works - those are different claims, and only the second one is "recovered". So the
+ * alias is invoked with a fixed, read-only payload and the response is checked against
+ * the contract the baseline records.
+ *
+ * Deliberately narrow: it invokes one alias, sends no caller-supplied payload, and never
+ * reads the function's environment or logs.
+ */
+export async function probeLambdaAlias({ FunctionName, Name, payload = { probe: true }, expectRelease = null }) {
+  if (typeof FunctionName !== 'string' || typeof Name !== 'string') {
+    throw new Error('probeLambdaAlias requires FunctionName and Name');
+  }
+
+  const response = await getLambdaClient().send(
+    new InvokeCommand({
+      FunctionName: `${FunctionName}:${Name}`,
+      InvocationType: 'RequestResponse',
+      Payload: Buffer.from(JSON.stringify(payload)),
+    }),
+  );
+
+  const raw = response.Payload ? Buffer.from(response.Payload).toString('utf8') : '';
+  let parsed = null;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    parsed = null;
+  }
+
+  // A handled error still arrives as a 200 with FunctionError set, so the status code
+  // alone is not evidence of health.
+  const functionError = response.FunctionError ?? null;
+  let body = null;
+  try {
+    body = typeof parsed?.body === 'string' ? JSON.parse(parsed.body) : (parsed?.body ?? null);
+  } catch {
+    body = null;
+  }
+
+  const releaseServed = body?.release ?? null;
+  const healthy =
+    !functionError &&
+    parsed?.statusCode === 200 &&
+    body?.ok === true &&
+    (expectRelease === null || releaseServed === expectRelease);
+
+  return {
+    invoked: true,
+    statusCode: parsed?.statusCode ?? null,
+    functionError,
+    executedVersion: response.ExecutedVersion ?? null,
+    releaseServed,
+    expectedRelease: expectRelease,
+    healthy,
+    // Truncated: a probe response is lab output, but there is no reason to let an
+    // arbitrary payload grow without bound in an audit record.
+    responseExcerpt: raw.slice(0, 400),
+  };
+}
+
+/**
  * Action type to executor. Keys are the literal allowlisted action types; there is no
  * lookup by a caller-supplied string and no default branch that would run something
  * unrecognised.
@@ -215,6 +351,7 @@ const EXECUTORS = Object.freeze({
   [ACTION_TYPES.LAMBDA_UPDATE_TIMEOUT]: applyLambdaTimeoutFix,
   [ACTION_TYPES.LOGS_UPDATE_RETENTION]: applyLogRetentionFix,
   [ACTION_TYPES.LAMBDA_UPDATE_ENVIRONMENT]: applyLambdaEnvironmentFix,
+  [ACTION_TYPES.LAMBDA_ROLLBACK_ALIAS]: applyLambdaAliasRollback,
 });
 
 export function executorFor(actionType) {

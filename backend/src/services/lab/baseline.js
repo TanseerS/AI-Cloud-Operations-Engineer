@@ -47,6 +47,22 @@ const RESTORE_ACTIONS = {
     // Compared by key names, because values are never read back.
     normaliseExpected: (brokenValue) => Object.keys(brokenValue ?? {}).sort(),
   },
+  // An alias is restored by pointing it back at the version the baseline records as the
+  // seeded broken one. Like every other entry here, the version comes from baseline data
+  // and the action comes from the allowlist - the baseline cannot name its own API.
+  'aws_lambda_alias::FunctionVersion': {
+    actionType: ACTION_TYPES.LAMBDA_ROLLBACK_ALIAS,
+    awsOperation: 'lambda:UpdateAlias',
+    service: 'lambda-alias',
+    stateField: 'FunctionVersion',
+    buildParameters: (target, brokenValue) => ({
+      FunctionName: target.function_name ?? target.name,
+      Name: target.alias ?? config.lab.rollbackAliasName,
+      FunctionVersion: String(brokenValue),
+    }),
+    // Lambda reports versions as strings; the baseline may carry a number.
+    normaliseExpected: (brokenValue) => String(brokenValue),
+  },
   'aws_cloudwatch_log_group::retentionInDays': {
     actionType: ACTION_TYPES.LOGS_UPDATE_RETENTION,
     awsOperation: 'logs:PutRetentionPolicy',
@@ -163,6 +179,34 @@ export function toRestoreTargets(issues) {
   }
 
   return { restorable, derived };
+}
+
+/**
+ * The rollback issue's baseline, for the detector.
+ *
+ * Detection needs to know which version is known-good, and verification needs to know
+ * what a healthy response looks like. Both are recorded with the lab rather than
+ * compiled into the application, so the lab stays the single source of truth - and a
+ * baseline that does not name a published version yields nothing rather than a guess.
+ */
+export function readRollbackBaseline(issues) {
+  const entry = (issues ?? []).find(
+    (issue) => issue.target?.type === 'aws_lambda_alias' && issue.target?.attribute === 'FunctionVersion',
+  );
+  if (!entry) return null;
+
+  const knownGood = entry.known_good?.version;
+  if (knownGood === undefined || knownGood === null) return null;
+
+  return {
+    issueId: entry.issue_id,
+    functionName: entry.target.function_name ?? entry.target.name,
+    aliasName: entry.target.alias ?? config.lab.rollbackAliasName,
+    knownGoodVersion: String(knownGood),
+    knownGoodRelease: entry.known_good?.release ?? null,
+    brokenVersion: entry.broken_value === undefined ? null : String(entry.broken_value),
+    probePayload: entry.known_good?.probe_payload ?? { probe: true },
+  };
 }
 
 export { RESTORE_ACTIONS };

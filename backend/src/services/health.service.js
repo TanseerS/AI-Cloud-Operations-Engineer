@@ -6,6 +6,8 @@ import { collectMetrics } from './cloudwatch/metrics.js';
 import { collectLogInsights } from './cloudwatch/logs.js';
 import { makeFact, summarise } from './health/facts.js';
 import { RULES, SEVERITY_ORDER } from './health/rules.js';
+import { loadBaseline, readRollbackBaseline } from './lab/baseline.js';
+import { captureLambdaAliasState } from './remediation/executors.js';
 
 /**
  * Health analysis.
@@ -38,7 +40,12 @@ const SEVERITY_PENALTY = {
 
 let cache = null;
 
-const slug = (value) =>
+/**
+ * Fact ids are built from this, and reset verification looks facts up by id, so both
+ * sides have to agree exactly. Exported rather than reimplemented: two copies of a
+ * slug function is two chances for them to diverge silently.
+ */
+export const slug = (value) =>
   String(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
 
 function buildWindow(hours) {
@@ -302,9 +309,74 @@ export async function getHealthAnalysis({ hours = DEFAULT_WINDOW_HOURS, force = 
     });
   }
 
+  // ---- Alias deployments, for the rollback detector
+  //
+  // Which version an alias serves is configuration, and which version is known-good is
+  // recorded with the lab. Both are read here as facts so the rule can cite them, and a
+  // failure to read either simply yields no deployment rather than a guess.
+  const aliasDeployments = [];
+  try {
+    const baseline = await loadBaseline();
+    const rollback = baseline.available ? readRollbackBaseline(baseline.issues) : null;
+
+    if (rollback) {
+      const target = lambdas.find((resource) => resource.name === rollback.functionName);
+      if (target) {
+        const alias = await captureLambdaAliasState(rollback.functionName, rollback.aliasName);
+
+        const aliasFact = record(
+          makeFact({
+            id: `fact:lambda:${slug(rollback.functionName)}:alias-version`,
+            kind: 'configuration',
+            label: `Alias "${rollback.aliasName}" serves version`,
+            value: alias.FunctionVersion,
+            resourceId: target.id,
+            resourceName: rollback.functionName,
+            service: 'lambda',
+            source: 'lambda:GetAlias FunctionVersion',
+            available: alias.FunctionVersion !== null,
+          }),
+        );
+
+        const knownGoodFact = record(
+          makeFact({
+            id: `fact:lambda:${slug(rollback.functionName)}:known-good-version`,
+            kind: 'configuration',
+            label: 'Known-good version recorded in the lab baseline',
+            value: rollback.knownGoodVersion,
+            resourceId: target.id,
+            resourceName: rollback.functionName,
+            service: 'lambda',
+            source: `ssm:GetParametersByPath ${config.aws.baselineParameterPath}/issues`,
+            available: true,
+          }),
+        );
+
+        aliasDeployments.push({
+          functionName: rollback.functionName,
+          functionId: target.id,
+          aliasName: rollback.aliasName,
+          aliasVersion: alias.FunctionVersion,
+          aliasRevisionId: alias.RevisionId,
+          knownGoodVersion: rollback.knownGoodVersion,
+          knownGoodRelease: rollback.knownGoodRelease,
+          probePayload: rollback.probePayload,
+          aliasFactId: aliasFact.id,
+          knownGoodFactId: knownGoodFact.id,
+        });
+      }
+    }
+  } catch (error) {
+    // The lab may simply not have a rollback resource yet. That is not a health failure.
+    warnings.push({
+      stage: 'alias-deployments',
+      message: `Alias deployment state was not collected: ${describeAwsError(error).message}`,
+    });
+  }
+
   // ---- Run the rules
   const factsById = new Map(facts.map((fact) => [fact.id, fact]));
-  const context = { lambdaMetrics, apiMetrics, logGroupFacts, timeoutMismatches, window };
+  const context = { lambdaMetrics, apiMetrics, logGroupFacts, timeoutMismatches, aliasDeployments, window };
   const detectedAt = new Date().toISOString();
 
   const issues = RULES.flatMap((rule) => rule.detect(context)).map((issue) => ({

@@ -46,9 +46,88 @@ export const ACTION_TYPES = {
   // Used by lab reset to restore the recorded baseline environment, which for this lab
   // is the empty set. No remediation rule maps to it, so it never proposes a fix.
   LAMBDA_UPDATE_ENVIRONMENT: 'lambda:update-environment',
+  // Moves a lab function's alias between two already-published versions. It cannot
+  // publish a version, only select among versions that already exist.
+  LAMBDA_ROLLBACK_ALIAS: 'lambda:rollback-alias',
 };
 
+/** Lambda version identifiers are strings, and $LATEST is never a rollback target. */
+const PUBLISHED_VERSION = /^[1-9][0-9]*$/;
+export function isPublishedVersion(value) {
+  return typeof value === 'string' && PUBLISHED_VERSION.test(value);
+}
+
 export const REMEDIATION_REGISTRY = {
+  'lambda-alias-serving-failing-version': {
+    actionType: ACTION_TYPES.LAMBDA_ROLLBACK_ALIAS,
+    awsOperation: 'lambda:UpdateAlias',
+    service: 'lambda-alias',
+    risk: 'low',
+    reversible: true,
+    title: 'Roll the alias back to the last known-good version',
+    prerequisites: [
+      'The alias must currently resolve to a published version other than the known-good one.',
+      'The known-good version must be recorded in the lab baseline and still published.',
+      "The alias revision observed at planning time must still be current at execution time.",
+    ],
+    expectedImpact:
+      'Traffic through the alias moves to the previously published known-good version. No code is ' +
+      'built, published or deleted - only the pointer moves, so the failing version stays available ' +
+      'for inspection and the change reverses by moving the pointer back.',
+    /**
+     * Both the target version and the alias name come from the baseline and from server
+     * configuration. Nothing here reads anything the caller sent.
+     */
+    computeChange({ issue, resource }) {
+      const current = issue.metrics?.aliasVersion ?? null;
+      const knownGood = issue.metrics?.knownGoodVersion ?? null;
+      const aliasName = issue.metrics?.aliasName ?? null;
+      const revisionId = issue.metrics?.aliasRevisionId ?? null;
+
+      if (!isPublishedVersion(current)) {
+        return { supported: false, reason: `The alias resolves to "${current}", which is not a published version.` };
+      }
+      if (!isPublishedVersion(knownGood)) {
+        return { supported: false, reason: 'The baseline does not record a published known-good version.' };
+      }
+      if (!aliasName) {
+        return { supported: false, reason: 'The alias name could not be established from the lab baseline.' };
+      }
+      if (current === knownGood) {
+        return { supported: false, reason: 'The alias already serves the known-good version.' };
+      }
+
+      return {
+        supported: true,
+        currentState: { FunctionVersion: current },
+        desiredState: { FunctionVersion: knownGood },
+        parameters: {
+          FunctionName: resource.name,
+          Name: aliasName,
+          FunctionVersion: knownGood,
+          // Optimistic concurrency: carried into UpdateAlias so a rollback cannot
+          // overwrite an alias somebody else moved after this plan was approved.
+          RevisionId: revisionId,
+        },
+        rollbackParameters: {
+          FunctionName: resource.name,
+          Name: aliasName,
+          FunctionVersion: current,
+        },
+        rationale:
+          `Alias "${aliasName}" is serving version ${current}, which is failing in CloudWatch. ` +
+          `Version ${knownGood} is the known-good version recorded in the lab baseline.`,
+        // The contract the behaviour probe checks the alias against after the change.
+        // Both halves come from the baseline, so what counts as "working" is recorded
+        // with the lab rather than decided at verification time.
+        probe: {
+          payload: issue.metrics?.probePayload ?? { probe: true },
+          expectRelease: issue.metrics?.knownGoodRelease ?? null,
+        },
+      };
+    },
+  },
+
   'lambda-memory-over-provisioned': {
     actionType: ACTION_TYPES.LAMBDA_UPDATE_MEMORY,
     awsOperation: 'lambda:UpdateFunctionConfiguration',

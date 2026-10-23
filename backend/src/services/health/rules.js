@@ -16,6 +16,10 @@ export const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
 const THRESHOLDS = {
   lambdaErrorRate: { critical: 50, high: 10, medium: 0 },
   apiErrorRate: { critical: 50, high: 10, medium: 0 },
+  // A failing deployment has to be failing measurably, not incidentally. One stray
+  // error in a window is not a reason to move production traffic.
+  aliasErrorRate: 25,
+  aliasMinimumInvocations: 3,
   memoryUtilisation: 40, // percent below which provisioning is questioned
   memoryFloorMb: 256, // below this the saving is not worth a finding
   retentionDays: 400,
@@ -239,7 +243,78 @@ export const timeoutExceedsCaller = {
   },
 };
 
+/**
+ * 7. An alias serving a version that is failing.
+ *
+ * Two independent signals are required, and the rule is deliberately useless with only
+ * one of them:
+ *
+ *   - CloudWatch says the function is failing now. Without this the rule would fire on
+ *     any alias that merely points somewhere unexpected, which is drift, not an outage.
+ *   - The alias resolves to a version that is not the one the lab baseline records as
+ *     known-good. Without this there would be nothing safe to roll back *to*.
+ *
+ * Together they describe the one situation a version rollback actually fixes: a
+ * deployment that is live and broken, with a known-good predecessor still published.
+ */
+export const aliasServingFailingVersion = {
+  id: 'lambda-alias-serving-failing-version',
+  category: 'reliability',
+  detect({ lambdaMetrics, aliasDeployments }) {
+    const issues = [];
+
+    for (const deployment of aliasDeployments ?? []) {
+      // No baseline, no known-good version, nothing to propose.
+      if (!deployment.knownGoodVersion || !deployment.aliasVersion) continue;
+      // The alias is already where it should be.
+      if (deployment.aliasVersion === deployment.knownGoodVersion) continue;
+
+      const entry = lambdaMetrics.find((item) => item.resource.name === deployment.functionName);
+      if (!entry) continue;
+
+      const { invocations, errors } = entry.facts;
+      // Absent evidence is not evidence of failure. A dormant lab stays quiet.
+      if (!invocations?.available || !errors?.available) continue;
+      if (invocations.value < THRESHOLDS.aliasMinimumInvocations) continue;
+      if (errors.value === 0) continue;
+
+      const errorRate = rate(errors.value, invocations.value);
+      if (errorRate === null || errorRate < THRESHOLDS.aliasErrorRate) continue;
+
+      issues.push({
+        ruleId: 'lambda-alias-serving-failing-version',
+        severity: errorRate >= 50 ? 'critical' : 'high',
+        category: 'reliability',
+        title: `Alias "${deployment.aliasName}" on ${deployment.functionName} is serving a failing version`,
+        description:
+          `Alias "${deployment.aliasName}" resolves to version ${deployment.aliasVersion}, which failed ` +
+          `${errors.value} of ${invocations.value} invocations (${errorRate}%) in the analysis window. ` +
+          `Version ${deployment.knownGoodVersion} is recorded in the lab baseline as the last known-good ` +
+          'release and is still published.',
+        resource: deployment.functionName,
+        resourceId: deployment.functionId,
+        service: 'lambda',
+        metrics: {
+          aliasName: deployment.aliasName,
+          aliasVersion: deployment.aliasVersion,
+          knownGoodVersion: deployment.knownGoodVersion,
+          knownGoodRelease: deployment.knownGoodRelease,
+          aliasRevisionId: deployment.aliasRevisionId,
+          probePayload: deployment.probePayload,
+          invocations: invocations.value,
+          errors: errors.value,
+          errorRate,
+        },
+        evidenceFactIds: [invocations.id, errors.id, deployment.aliasFactId, deployment.knownGoodFactId].filter(Boolean),
+      });
+    }
+
+    return issues;
+  },
+};
+
 export const RULES = [
+  aliasServingFailingVersion,
   lambdaErrorRate,
   apiServerErrors,
   lambdaMemoryOverProvisioned,

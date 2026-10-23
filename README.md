@@ -370,6 +370,7 @@ docs/            Per-capability documentation, demo script, submission notes
 | [Cost analysis](docs/cost-analysis.md) · [Health analysis](docs/health-analysis.md) | Cost and CloudWatch |
 | [AI analysis](docs/ai-analysis.md) | Model selection, schema, grounding |
 | [Remediation planning](docs/remediation-planning.md) · [execution](docs/remediation-execution.md) | The safety model |
+| [Lambda version rollback](docs/lambda-version-rollback.md) | Alias rollback with an independent behaviour probe |
 | [Lab reset](docs/lab-reset.md) · [Autonomous management](docs/autonomous-lab-management.md) | Reproducibility |
 | [Design system](docs/design-system.md) | Tokens, themes, components |
 | [Connecting an AI coding agent to AWS](docs/connecting-an-ai-coding-agent-to-aws.pdf) | Setup and verification of the AWS Agent Toolkit (PDF) |

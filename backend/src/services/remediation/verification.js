@@ -1,20 +1,29 @@
 import { getHealthAnalysis } from '../health.service.js';
-import { captureStateFor } from './executors.js';
+import { captureStateFor, probeLambdaAlias } from './executors.js';
 
 /**
  * Verification.
  *
  * A successful AWS API response means the request was accepted, not that the problem is
- * gone. Verification therefore asks two independent questions:
+ * gone. Verification therefore asks independent questions:
  *
  *   1. Does the resource now hold the configuration the plan proposed? Read back from
  *      AWS, not inferred from the call succeeding.
  *   2. Does the detector still report the issue? The same rules and the same CloudWatch
  *      sources that found it in the first place are re-run.
+ *   3. For a rollback, does the thing actually work now? The alias is invoked and its
+ *      response checked against the contract the baseline records.
  *
- * Both must agree before a remediation is called verified. If AWS accepted the change but
- * the detector still fires, that is verification_failed - a real and useful outcome, and
- * one worth reporting honestly rather than rounding up to success.
+ * The third check exists because the first two can both pass while the service is still
+ * broken. An alias read-back proves a pointer moved; the detector can only report what
+ * CloudWatch has already published, which lags. Invoking the alias and seeing the
+ * known-good release answer is the only one of the three that observes behaviour, and it
+ * is the difference between "we changed something" and "it is working".
+ *
+ * All applicable checks must agree before a remediation is called verified. If AWS
+ * accepted the change but the detector still fires, or the probe still fails, that is
+ * verification_failed - a real and useful outcome, and one worth reporting honestly
+ * rather than rounding up to success.
  */
 
 function compareState(observed, expected) {
@@ -38,7 +47,7 @@ export async function verifyRemediation({ plan, targetName }) {
   let stateComparison = { matches: false, mismatches: [] };
 
   try {
-    observedState = await captureStateFor(plan.service, targetName);
+    observedState = await captureStateFor(plan.service, targetName, plan.parameters);
     stateComparison = compareState(observedState, plan.desiredState);
     configurationMatches = stateComparison.matches;
     evidence.push({
@@ -83,7 +92,41 @@ export async function verifyRemediation({ plan, targetName }) {
     });
   }
 
-  const verified = configurationMatches && issueStillDetected === false;
+  // 3. Behaviour. Only a plan that carries a probe contract gets one, so the two
+  //    existing checks are untouched for every action that had no probe before.
+  let probe = null;
+  if (plan.probe && plan.service === 'lambda-alias') {
+    try {
+      probe = await probeLambdaAlias({
+        FunctionName: plan.parameters.FunctionName,
+        Name: plan.parameters.Name,
+        payload: plan.probe.payload,
+        expectRelease: plan.probe.expectRelease ?? null,
+      });
+      evidence.push({
+        check: 'behaviour-probe',
+        source: `lambda:Invoke ${plan.parameters.FunctionName}:${plan.parameters.Name}`,
+        passed: probe.healthy,
+        detail: probe.healthy
+          ? `The alias answered healthily from version ${probe.executedVersion} serving ${probe.releaseServed}.`
+          : `The alias is still not behaving correctly: ${
+              probe.functionError
+                ? `FunctionError ${probe.functionError}`
+                : `statusCode ${probe.statusCode}, release ${probe.releaseServed}`
+            }`,
+      });
+    } catch (error) {
+      probe = { invoked: false, healthy: false, error: error.message };
+      evidence.push({
+        check: 'behaviour-probe',
+        source: 'lambda:Invoke',
+        passed: false,
+        detail: `Could not invoke the alias to verify behaviour: ${error.message}`,
+      });
+    }
+  }
+
+  const { verified, conclusion } = concludeVerification({ configurationMatches, issueStillDetected, probe });
 
   return {
     verified,
@@ -94,12 +137,43 @@ export async function verifyRemediation({ plan, targetName }) {
     stateMismatches: stateComparison.mismatches,
     issueStillDetected,
     detectorMetrics: detectorEvidence,
+    probe,
     evidence,
-    conclusion: verified
-      ? 'AWS reports the intended configuration and the detector no longer reports the issue.'
-      : configurationMatches
-        ? 'The configuration changed as intended, but the detector still reports the issue.'
-        : 'The resource does not hold the intended configuration.',
+    conclusion,
+  };
+}
+
+/**
+ * Whether the evidence adds up to "recovered", separated from the gathering of it so
+ * the decision can be tested exhaustively without touching AWS.
+ *
+ * A probe that was attempted must pass. A probe that does not apply cannot mask a
+ * failure elsewhere, and cannot manufacture a pass on its own either.
+ */
+export function concludeVerification({ configurationMatches, issueStillDetected, probe }) {
+  const behaviourOk = probe === null || probe === undefined ? true : probe.healthy === true;
+  const verified = configurationMatches === true && issueStillDetected === false && behaviourOk;
+
+  if (verified) {
+    return {
+      verified: true,
+      conclusion: probe
+        ? 'AWS reports the intended version, the detector no longer reports the issue, and the alias answers healthily when invoked.'
+        : 'AWS reports the intended configuration and the detector no longer reports the issue.',
+    };
+  }
+  if (configurationMatches !== true) {
+    return { verified: false, conclusion: 'The resource does not hold the intended configuration.' };
+  }
+  if (!behaviourOk) {
+    return {
+      verified: false,
+      conclusion: 'The configuration changed as intended, but invoking the alias shows it is still not working.',
+    };
+  }
+  return {
+    verified: false,
+    conclusion: 'The configuration changed as intended, but the detector still reports the issue.',
   };
 }
 
