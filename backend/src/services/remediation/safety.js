@@ -2,6 +2,7 @@ import config from '../../config/index.js';
 import { LAB_TAG_KEY, LAB_TAG_VALUE, matchesNamingConvention } from '../aws/lab-filter.js';
 import {
   isAllowedActionType,
+  isPublishedVersion,
   ACTION_TYPES,
   ALLOWED_RETENTION_DAYS,
   LAMBDA_MEMORY_MIN_MB,
@@ -77,6 +78,30 @@ function checkParameters(actionType, parameters) {
             problems.push(`Environment.Variables.${key} must be a string`);
           }
         }
+      }
+      break;
+    }
+    case ACTION_TYPES.LAMBDA_ROLLBACK_ALIAS: {
+      // The function and alias are fixed by server configuration, not by the plan. A
+      // plan naming anything else is refused here even if every other check passed.
+      if (parameters.FunctionName !== config.lab.rollbackFunctionName) {
+        problems.push(
+          `FunctionName must be ${config.lab.rollbackFunctionName}; rollback is restricted to that one lab function`,
+        );
+      }
+      if (parameters.Name !== config.lab.rollbackAliasName) {
+        problems.push(`alias must be "${config.lab.rollbackAliasName}"`);
+      }
+      // $LATEST, a non-numeric label, or a missing version are all refused: a rollback
+      // targets a version that was explicitly published, never a moving pointer.
+      if (!isPublishedVersion(parameters.FunctionVersion)) {
+        problems.push(
+          `FunctionVersion ${JSON.stringify(parameters.FunctionVersion)} is not an explicitly published version`,
+        );
+      }
+      // Without the token the call would clobber whatever the alias points at now.
+      if (typeof parameters.RevisionId !== 'string' || parameters.RevisionId.length === 0) {
+        problems.push('RevisionId observed at planning time is required, so a concurrent alias change cannot be overwritten');
       }
       break;
     }

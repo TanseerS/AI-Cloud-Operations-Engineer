@@ -1,7 +1,7 @@
 import config from '../config/index.js';
 import { describeAwsError } from './aws/clients.js';
 import { discoverResources } from './discovery.service.js';
-import { getHealthAnalysis } from './health.service.js';
+import { getHealthAnalysis, slug } from './health.service.js';
 import { evaluateSafety, REQUIRED_TAGS } from './remediation/safety.js';
 import { captureStateFor, executorFor } from './remediation/executors.js';
 import { loadBaseline, toRestoreTargets } from './lab/baseline.js';
@@ -113,7 +113,7 @@ export async function inspectState({ targets, byName }) {
     }
 
     try {
-      const state = await captureStateFor(target.service, target.resourceName);
+      const state = await captureStateFor(target.service, target.resourceName, target.parameters);
       observations.push({ target, resource, status: 'observed', observedValue: state?.[target.stateField] ?? null });
     } catch (error) {
       observations.push({ target, resource, status: 'unreadable', error: describeAwsError(error) });
@@ -207,7 +207,7 @@ async function performReset({ trigger = 'manual' } = {}) {
     // Phase 4 - applyChanges. Only reached for attributes that actually differ.
     try {
       const execution = await executor(target.parameters);
-      const afterState = await captureStateFor(target.service, target.resourceName);
+      const afterState = await captureStateFor(target.service, target.resourceName, target.parameters);
       const afterValue = afterState?.[target.stateField] ?? null;
       const restored = compareValue(afterValue, target.expectedValue);
 
@@ -294,6 +294,38 @@ function publicTarget(target) {
   };
 }
 
+/**
+ * Whether a rule failing to fire after a reset is a problem.
+ *
+ * Reset restores configuration. It does not generate traffic, so a rule that needs a
+ * CloudWatch metric cannot be expected to fire in an idle lab - that is a missing
+ * signal, not a failed restore. A rule whose evidence *is* present and still does not
+ * fire is a genuine failure and still fails the reset.
+ *
+ * Pure and exported so both branches are covered by tests rather than by a live lab.
+ */
+export function judgeDetectorExpectation({ ruleId, detected, evidenceAvailable }) {
+  if (detected) {
+    return { passed: true, inconclusive: false, detail: `The detector reports ${ruleId} again.` };
+  }
+  if (!evidenceAvailable) {
+    return {
+      passed: true,
+      inconclusive: true,
+      detail:
+        `${ruleId} could not be evaluated: it needs CloudWatch evidence that only exists after the lab ` +
+        'has been invoked, and reset does not generate traffic. Configuration is at baseline.',
+    };
+  }
+  return {
+    passed: false,
+    inconclusive: false,
+    detail:
+      `The detector does not report ${ruleId} even though its evidence is available. ` +
+      'The lab may not be fully back at baseline.',
+  };
+}
+
 export async function verify({ restorable, derived, evaluations }) {
   const checks = [];
 
@@ -303,7 +335,7 @@ export async function verify({ restorable, derived, evaluations }) {
     if (evaluation?.status === 'skipped') continue;
 
     try {
-      const state = await captureStateFor(target.service, target.resourceName);
+      const state = await captureStateFor(target.service, target.resourceName, target.parameters);
       const observed = state?.[target.stateField] ?? null;
       checks.push({
         check: 'configuration-readback',
@@ -326,49 +358,84 @@ export async function verify({ restorable, derived, evaluations }) {
     }
   }
 
-  // 2. Re-run the detector. The intentional issues should be detected again.
+  // 2. Re-run the detector. The intentional issues should be detected again - but only
+  //    the ones whose evidence does not depend on traffic.
+  //
+  //    Some rules read configuration, which is always there. Others read CloudWatch
+  //    metrics, which only exist if the function was recently invoked. Reset restores
+  //    configuration; it does not generate traffic, and it should not pretend to. A lab
+  //    that has been idle for a week is correctly at baseline even though its
+  //    metric-backed rules are silent, so requiring those rules to fire made reset
+  //    report failure for something it neither caused nor controls.
+  //
+  //    The distinction is drawn from the facts themselves rather than from a hardcoded
+  //    list of "flaky" rules: if the fact a rule depends on came back unavailable, the
+  //    check is inconclusive. If the fact is there and the rule still does not fire,
+  //    that is a real failure and still fails the reset.
   let detectedIssueIds = [];
+  let factsById = new Map();
   let detectorError = null;
   try {
     const health = await getHealthAnalysis({ force: true });
     detectedIssueIds = (health.issues ?? []).map((issue) => issue.ruleId);
+    factsById = new Map((health.facts ?? []).map((fact) => [fact.id, fact]));
   } catch (error) {
     detectorError = describeAwsError(error).message;
   }
 
   const restoredRuleExpectations = {
-    'aicoe-lab-issue-001': 'lambda-memory-over-provisioned',
-    'aicoe-lab-issue-002': 'log-retention-excessive',
-    'aicoe-lab-issue-005': 'lambda-timeout-exceeds-caller',
+    'aicoe-lab-issue-001': {
+      ruleId: 'lambda-memory-over-provisioned',
+      // Peak memory is parsed from the function's own REPORT lines.
+      requiresFact: (name) => `fact:lambda:${slug(name)}:memory-used`,
+      resourceName: 'aicoe-lab-function',
+    },
+    'aicoe-lab-issue-002': { ruleId: 'log-retention-excessive' },
+    'aicoe-lab-issue-005': { ruleId: 'lambda-timeout-exceeds-caller' },
+    'aicoe-lab-issue-006': {
+      ruleId: 'lambda-alias-serving-failing-version',
+      // Needs a measured error rate, so it is traffic-dependent in the same way.
+      requiresFact: (name) => `fact:lambda:${slug(name)}:errors`,
+      resourceName: config.lab.rollbackFunctionName,
+    },
   };
 
   const issuesDetected = [];
-  for (const [issueId, ruleId] of Object.entries(restoredRuleExpectations)) {
+  for (const [issueId, expectation] of Object.entries(restoredRuleExpectations)) {
     if (!restorable.some((target) => target.issueId === issueId)) continue;
+
+    const { ruleId } = expectation;
     const detected = detectedIssueIds.includes(ruleId);
-    issuesDetected.push({ issueId, ruleId, detected });
-    checks.push({
-      check: 'detector-rerun',
-      issueId,
-      passed: detected,
-      detail: detected
-        ? `The detector reports ${ruleId} again.`
-        : `The detector does not report ${ruleId}. The lab may not be fully back at baseline.`,
-    });
+
+    let evidenceAvailable = true;
+    if (expectation.requiresFact) {
+      const fact = factsById.get(expectation.requiresFact(expectation.resourceName));
+      evidenceAvailable = Boolean(fact?.available);
+    }
+
+    const outcome = judgeDetectorExpectation({ ruleId, detected, evidenceAvailable });
+    issuesDetected.push({ issueId, ruleId, detected, evidenceAvailable, inconclusive: outcome.inconclusive });
+    checks.push({ check: 'detector-rerun', issueId, ...outcome });
   }
 
   const failed = checks.filter((entry) => !entry.passed);
+  const inconclusive = checks.filter((entry) => entry.inconclusive);
+  const passed = failed.length === 0 && !detectorError;
+
   return {
-    passed: failed.length === 0 && !detectorError,
+    passed,
     verifiedAt: new Date().toISOString(),
     checks,
     issuesDetected,
+    inconclusiveChecks: inconclusive.length,
     derivedIssues: derived.map((entry) => ({ issueId: entry.issueId, reason: entry.reason })),
     detectorError,
-    conclusion:
-      failed.length === 0 && !detectorError
+    conclusion: !passed
+      ? `${failed.length} verification check(s) did not pass.`
+      : inconclusive.length === 0
         ? 'Every managed attribute matches the baseline and the detector reports the intentional issues again.'
-        : `${failed.length} verification check(s) did not pass.`,
+        : `Every managed attribute matches the baseline. ${inconclusive.length} rule(s) could not be ` +
+          'evaluated without recent traffic, which reset does not generate.',
   };
 }
 

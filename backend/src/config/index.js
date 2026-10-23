@@ -100,6 +100,17 @@ export const config = Object.freeze({
     tableName: readString('REMEDIATION_TABLE_NAME', ''),
     storeDir: readString('REMEDIATION_STORE_DIR', ''),
   },
+  lab: {
+    // The rollback lab resource. A dedicated function rather than one of the existing
+    // lab functions: those already carry a baseline keyed on a configuration attribute,
+    // and adding a version axis to them would make their reset ambiguous.
+    //
+    // The known-good version is NOT configured here. It is read from the SSM baseline at
+    // plan time and re-read immediately before execution, so there is one source of truth
+    // and no way for a deploy-time constant to drift from what the lab actually holds.
+    rollbackFunctionName: readString('LAB_ROLLBACK_FUNCTION_NAME', 'aicoe-lab-rollback-function'),
+    rollbackAliasName: readString('LAB_ROLLBACK_ALIAS_NAME', 'live'),
+  },
   automation: {
     // The scheduled lab check. Interval lives here rather than in the deploy script, so
     // the schedule and anything that reports on it read the same number.

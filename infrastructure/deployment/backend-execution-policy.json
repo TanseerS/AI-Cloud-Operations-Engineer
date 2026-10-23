@@ -85,6 +85,30 @@
       ]
     },
     {
+      "Sid": "LabAliasReads",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:GetAlias",
+        "lambda:ListVersionsByFunction"
+      ],
+      "Resource": [
+        "arn:aws:lambda:us-east-1:303670280486:function:aicoe-lab-rollback-function",
+        "arn:aws:lambda:us-east-1:303670280486:function:aicoe-lab-rollback-function:live"
+      ]
+    },
+    {
+      "Sid": "LabAliasRollback",
+      "Effect": "Allow",
+      "Action": "lambda:UpdateAlias",
+      "Resource": "arn:aws:lambda:us-east-1:303670280486:function:aicoe-lab-rollback-function:live"
+    },
+    {
+      "Sid": "LabAliasBehaviourProbe",
+      "Effect": "Allow",
+      "Action": "lambda:InvokeFunction",
+      "Resource": "arn:aws:lambda:us-east-1:303670280486:function:aicoe-lab-rollback-function:live"
+    },
+    {
       "Sid": "AutomationAuditWriteOnly",
       "Effect": "Allow",
       "Action": "ssm:PutParameter",
