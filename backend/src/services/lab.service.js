@@ -104,6 +104,7 @@ export async function inspectState({ targets, byName }) {
       actionType: target.actionType,
       parameters: target.parameters,
       reversible: true,
+      origin: 'reset',
     });
 
     if (!safety.safe) {

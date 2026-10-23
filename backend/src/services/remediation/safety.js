@@ -45,7 +45,11 @@ function checkTags(resource) {
   };
 }
 
-function checkParameters(actionType, parameters) {
+/**
+ * @param origin 'remediation' for a planned, human-approved change; 'reset' for the lab
+ *   restore engine. The difference matters for exactly one check - see RevisionId below.
+ */
+function checkParameters(actionType, parameters, origin) {
   const problems = [];
 
   switch (actionType) {
@@ -99,8 +103,15 @@ function checkParameters(actionType, parameters) {
           `FunctionVersion ${JSON.stringify(parameters.FunctionVersion)} is not an explicitly published version`,
         );
       }
-      // Without the token the call would clobber whatever the alias points at now.
-      if (typeof parameters.RevisionId !== 'string' || parameters.RevisionId.length === 0) {
+      // Optimistic concurrency, required for a remediation and not for a reset.
+      //
+      // A remediation has a gap between a human approving a specific change and that
+      // change being applied, so it must prove the alias has not moved in between. A
+      // reset has no such gap: it is server-initiated, holds an exclusive in-flight
+      // lock, and writes a constant from the baseline rather than a value derived
+      // earlier. Requiring a token it cannot have would simply make reset skip the
+      // target - which is precisely what it did before this distinction existed.
+      if (origin !== 'reset' && (typeof parameters.RevisionId !== 'string' || parameters.RevisionId.length === 0)) {
         problems.push('RevisionId observed at planning time is required, so a concurrent alias change cannot be overwritten');
       }
       break;
@@ -128,7 +139,7 @@ function checkParameters(actionType, parameters) {
 /**
  * @param resource a resource object produced by discovery, never caller input
  */
-export function evaluateSafety({ resource, actionType, parameters, reversible }) {
+export function evaluateSafety({ resource, actionType, parameters, reversible, origin = 'remediation' }) {
   const checks = [];
 
   checks.push({
@@ -168,7 +179,7 @@ export function evaluateSafety({ resource, actionType, parameters, reversible })
     detail: isAllowedActionType(actionType) ? `${actionType} is allowlisted` : `${actionType} is not allowlisted`,
   });
 
-  checks.push(checkParameters(actionType, parameters ?? {}));
+  checks.push(checkParameters(actionType, parameters ?? {}, origin));
 
   checks.push({
     id: 'reversible',

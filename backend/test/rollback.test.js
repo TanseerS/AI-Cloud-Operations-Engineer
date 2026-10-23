@@ -325,6 +325,77 @@ test('the committed issue-006 baseline is internally consistent', async () => {
   assert.equal(restorable[0].parameters.FunctionVersion, rollback.brokenVersion);
 });
 
+/* -------------------------------------------- remediation vs reset origin */
+
+test('REGRESSION: reset may restore an alias without an approval-time revision', () => {
+  // The revision token guards the gap between a human approving a change and it being
+  // applied. Reset has no such gap, and requiring the token made the safety gate skip
+  // the alias silently - the lab stayed fixed and reset reported success.
+  const result = evaluateSafety({
+    resource: labResource(),
+    actionType: ACTION_TYPES.LAMBDA_ROLLBACK_ALIAS,
+    parameters: { FunctionName: FN, Name: ALIAS, FunctionVersion: '2' },
+    reversible: true,
+    origin: 'reset',
+  });
+  assert.equal(result.safe, true, `reset was blocked: ${result.failedChecks.join(', ')}`);
+});
+
+test('a remediation still requires the revision token', () => {
+  const result = evaluateSafety({
+    resource: labResource(),
+    actionType: ACTION_TYPES.LAMBDA_ROLLBACK_ALIAS,
+    parameters: { FunctionName: FN, Name: ALIAS, FunctionVersion: '2' },
+    reversible: true,
+    // origin defaults to 'remediation'
+  });
+  assert.equal(result.safe, false);
+  assert.ok(result.failedChecks.includes('action-parameters'));
+});
+
+test('reset origin relaxes ONLY the revision requirement, nothing else', () => {
+  // Everything that protects the target must still apply to a reset.
+  for (const [label, override] of [
+    ['wrong function', { FunctionName: 'aicoe-lab-function' }],
+    ['wrong alias', { Name: 'prod' }],
+    ['$LATEST', { FunctionVersion: '$LATEST' }],
+    ['unpublished version', { FunctionVersion: '0' }],
+  ]) {
+    const result = evaluateSafety({
+      resource: labResource(),
+      actionType: ACTION_TYPES.LAMBDA_ROLLBACK_ALIAS,
+      parameters: { FunctionName: FN, Name: ALIAS, FunctionVersion: '2', ...override },
+      reversible: true,
+      origin: 'reset',
+    });
+    assert.equal(result.safe, false, `${label} must still be refused during a reset`);
+  }
+
+  // And an untagged resource is still refused however the call originated.
+  const untagged = evaluateSafety({
+    resource: labResource({ tags: {} }),
+    actionType: ACTION_TYPES.LAMBDA_ROLLBACK_ALIAS,
+    parameters: { FunctionName: FN, Name: ALIAS, FunctionVersion: '2' },
+    reversible: true,
+    origin: 'reset',
+  });
+  assert.equal(untagged.safe, false);
+  assert.ok(untagged.failedChecks.includes('required-tags'));
+});
+
+test('the baseline-derived reset parameters pass the gate as reset supplies them', () => {
+  // Exactly the shape toRestoreTargets builds - no revision, versions as strings.
+  const { restorable } = toRestoreTargets([baselineDoc()]);
+  const result = evaluateSafety({
+    resource: labResource(),
+    actionType: restorable[0].actionType,
+    parameters: restorable[0].parameters,
+    reversible: true,
+    origin: 'reset',
+  });
+  assert.equal(result.safe, true, `failed: ${result.failedChecks.join(', ')}`);
+});
+
 /* ------------------------------------------------ state-capture dispatch */
 
 test('every registry entry names a service that state capture can actually read', () => {

@@ -92,7 +92,16 @@ bash infrastructure/lab/rollback-function/setup.sh
 
 Reset restores alias `live` to version 2 through the same allowlisted action, the same
 safety gate and the same executors as every other managed attribute. It is idempotent:
-an alias already at version 2 produces no AWS call.
+an alias already at version 2 produces no AWS call, which the unchanged `RevisionId`
+proves rather than merely reports.
+
+One distinction the gate has to draw: a **remediation** must carry the `RevisionId`
+observed at planning time, because a human approved one specific change and the alias
+must not have moved since. A **reset** has no such gap — it is server-initiated, holds an
+exclusive in-flight lock, and writes a constant from the baseline — so it supplies no
+token and the gate does not demand one. Requiring it made reset skip the alias silently
+and then report success, which live validation caught. Every other check still applies to
+a reset identically: function, alias, published version, tags, region.
 
 ### A reset-verification bug this work also fixed
 
@@ -112,13 +121,48 @@ are pinned by regression tests.
 
 | Role | Added | Scope |
 |---|---|---|
-| `aicoe-backend-role` | `lambda:GetAlias`, `lambda:ListVersionsByFunction` | the rollback function + its `live` alias |
-| | `lambda:UpdateAlias` | **the `live` alias ARN only** |
+| `aicoe-backend-role` | `lambda:GetAlias`, `lambda:ListVersionsByFunction`, `lambda:UpdateAlias` | the rollback function (see below) |
 | | `lambda:InvokeFunction` | **the `live` alias ARN only** — the project's only invoke permission |
-| `aicoe-lab-automation-role` | `lambda:GetAlias`, `lambda:UpdateAlias` | **the `live` alias ARN only** |
+| `aicoe-lab-automation-role` | `lambda:GetAlias`, `lambda:UpdateAlias` | the rollback function (see below) |
 
-Neither role gains `PublishVersion`, `DeleteAlias`, `DeleteFunction` or any wildcard. The
-scheduler role gains no invoke permission and still holds no Bedrock permission at all.
+Neither role gains `PublishVersion`, `DeleteAlias`, `DeleteFunction`, `UpdateFunctionCode`
+or any wildcard. The scheduler role gains no invoke permission and still holds no Bedrock
+permission at all. All of that is asserted by IAM policy simulation, not by reading.
+
+### Why the alias actions are scoped to the function, not the alias
+
+The intent was to scope `UpdateAlias` to a single alias ARN, and the first version of this
+policy did exactly that. It does not work: **`lambda:UpdateAlias` and `lambda:GetAlias`
+authorize against the unqualified *function* ARN**, which live validation surfaced as
+
+```
+not authorized to perform: lambda:UpdateAlias on resource:
+arn:aws:lambda:us-east-1:...:function:aicoe-lab-rollback-function
+```
+
+Note the absence of `:live`. The IAM policy simulator reported *allowed* for the alias ARN,
+because that is a different question from the one Lambda actually asks. AWS exposes no
+condition key to narrow these actions to one alias.
+
+So the IAM boundary is the function, and the single-alias restriction is enforced one layer
+up, by the backend's parameter contract, which refuses any alias but `live` and is covered
+by tests. This function has exactly one alias, so the practical blast radius is unchanged —
+but the boundary is documented as it actually is rather than as it was intended.
+
+`lambda:InvokeFunction` **does** honour an alias-qualified ARN, so the probe permission is
+genuinely restricted to `:live`.
+
+### Applying an IAM change to a running Lambda
+
+A warm Lambda execution environment caches its role credentials, so a policy change is not
+picked up by an already-running container. After changing either policy, either wait for the
+environment to recycle or force it:
+
+```bash
+aws lambda update-function-configuration --function-name <fn> --environment "Variables={...}"
+```
+
+Both live failures during validation were this, not a policy error.
 
 ## Where Bedrock sits
 

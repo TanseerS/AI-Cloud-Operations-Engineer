@@ -113,14 +113,12 @@ doc["remediation"]["parameters"]["FunctionVersion"] = sys.argv[2]
 doc["reset"]["parameters"]["FunctionVersion"] = sys.argv[3]
 json.dump(doc, sys.stdout, indent=4)
 PY
+# Passed directly rather than through file://, which the CLI expands for some
+# arguments and not others - a silent mis-store would put a path in the baseline.
 aws ssm put-parameter --region "$REGION" \
   --name "/aicoe-lab/baseline/issues/aicoe-lab-issue-006" \
   --type String --tier Standard --overwrite \
-  --value "file:///tmp/aicoe-issue-006.json" >/dev/null 2>&1 \
-  || aws ssm put-parameter --region "$REGION" \
-       --name "/aicoe-lab/baseline/issues/aicoe-lab-issue-006" \
-       --type String --tier Standard --overwrite \
-       --value "$(cat /tmp/aicoe-issue-006.json)" >/dev/null
+  --value "$(cat /tmp/aicoe-issue-006.json)" >/dev/null
 aws ssm add-tags-to-resource --region "$REGION" --resource-type Parameter \
   --resource-id "/aicoe-lab/baseline/issues/aicoe-lab-issue-006" \
   --tags Key=Project,Value=ai-cloud-operations-engineer Key=Environment,Value=lab \
